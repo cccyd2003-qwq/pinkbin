@@ -17,7 +17,7 @@
     "@tauri-apps/plugin-shell": "^2.0.0",
     "clsx": "^2.1.1",
     "d3-hierarchy": "^3.1.2",
-    "lucide-react": "^0.451.0",
+    "lucide-react": "^0.577.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"
