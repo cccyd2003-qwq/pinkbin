@@ -139,7 +139,11 @@ where
                     });
                 })
             }))
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("MFT scan panicked (likely non-NTFS volume)")));
+            .unwrap_or_else(|_| {
+                Err(anyhow::anyhow!(
+                    "MFT scan panicked (likely non-NTFS volume)"
+                ))
+            });
             match mft_result {
                 Ok(n) => {
                     stats.mft_ms = mft_t0.elapsed().as_millis() as u64;

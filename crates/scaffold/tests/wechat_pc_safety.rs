@@ -142,10 +142,22 @@ fn wechat_pc_globs_are_safe() {
     // 4.x 图片/视频共用 msg/video/ 树，按后缀分流。两个桶必须互斥——
     // 不允许 .mp4 同时落到 received-images，也不允许 .jpg 落到 received-videos。
     let cross_bucket: &[(&str, &str)] = &[
-        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.mp4"),
-        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_raw.mp4"),
-        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.jpg"),
-        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_thumb.jpg"),
+        (
+            "received-images",
+            "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.mp4",
+        ),
+        (
+            "received-images",
+            "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_raw.mp4",
+        ),
+        (
+            "received-videos",
+            "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.jpg",
+        ),
+        (
+            "received-videos",
+            "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_thumb.jpg",
+        ),
     ];
     for (forbidden_id, p) in cross_bucket {
         let hits = matching_scopes(&scopes, p);
