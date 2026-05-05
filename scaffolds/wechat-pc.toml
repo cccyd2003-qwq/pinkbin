@@ -94,10 +94,13 @@ category = "media"
 variant  = "4.x"
 prompt   = { kind = "days", default = 30, label = "保留最近多少天" }
 
+# 4.x 实测：图片和视频混在同一棵 msg/video/<YYYY-MM>/ 目录下（msg/image/
+# 在 4.x 不存在）。两个 scope 共享 video/ 树，按文件后缀分流；缩略图
+# (_thumb.jpg) 归图片桶，高清版 (_raw.mp4) 归视频桶——纯按后缀，简单一致。
 [[scope]]
 id       = "received-videos"
 label    = "接收的视频"
-glob     = "**/xwechat_files/wxid_*/msg/video/**"
+glob     = "**/xwechat_files/wxid_*/msg/video/**/*.{mp4,mov,m4v,3gp,mkv,webm,avi,m4s}"
 mode     = "recycle"
 category = "media"
 variant  = "4.x"
@@ -106,7 +109,7 @@ prompt   = { kind = "days", default = 7, label = "保留最近多少天" }
 [[scope]]
 id       = "received-images"
 label    = "接收的图片"
-glob     = "**/xwechat_files/wxid_*/msg/image/**"
+glob     = "**/xwechat_files/wxid_*/msg/video/**/*.{jpg,jpeg,png,gif,webp,bmp,heic,heif}"
 mode     = "recycle"
 category = "media"
 variant  = "4.x"
@@ -160,10 +163,13 @@ prompt   = { kind = "none" }
 # Msg / MultiMsg 是聊天 DB，硬红线，不在任何 scope 内。
 # ============================================================================
 
+# 3.x 双路径：早期版本用顶层目录（Image/Image, Video, Files, Attachment），
+# 后期统一搬进 FileStorage/{Image,Video,File,Cache}。两套都得扫——参见
+# CleanMyWeChat 的 picCache/file/pic/video 分支：每个桶都同时匹配两种写法。
 [[scope]]
 id       = "image-cache-3x"
 label    = "接收的图片"
-glob     = "**/WeChat Files/wxid_*/FileStorage/Image/**"
+glob     = "**/WeChat Files/wxid_*/{Image/Image,FileStorage/Image}/**"
 mode     = "recycle"
 category = "media"
 variant  = "3.x"
@@ -172,7 +178,7 @@ prompt   = { kind = "days", default = 30, label = "保留最近多少天" }
 [[scope]]
 id       = "video-cache-3x"
 label    = "接收的视频"
-glob     = "**/WeChat Files/wxid_*/FileStorage/Video/**"
+glob     = "**/WeChat Files/wxid_*/{Video,FileStorage/Video}/**"
 mode     = "recycle"
 category = "media"
 variant  = "3.x"
@@ -181,7 +187,7 @@ prompt   = { kind = "days", default = 7, label = "保留最近多少天" }
 [[scope]]
 id       = "file-cache-3x"
 label    = "接收的文件"
-glob     = "**/WeChat Files/wxid_*/FileStorage/File/**"
+glob     = "**/WeChat Files/wxid_*/{Files,FileStorage/File}/**"
 mode     = "recycle"
 category = "media"
 variant  = "3.x"
@@ -226,7 +232,9 @@ prompt   = { kind = "none" }
 [[scope]]
 id       = "cache-misc-3x"
 label    = "杂项缓存"
-glob     = "**/WeChat Files/wxid_*/FileStorage/Cache/**"
+# Attachment/ 是顶层版本的图片/缩略图缓存，FileStorage/Cache/ 是统一布局后的等价物，
+# CleanMyWeChat 的 picCacheCheck 分支同时清两者。
+glob     = "**/WeChat Files/wxid_*/{Attachment,FileStorage/Cache}/**"
 mode     = "recycle"
 category = "cache"
 variant  = "3.x"

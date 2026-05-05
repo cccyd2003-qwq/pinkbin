@@ -95,17 +95,28 @@ fn wechat_pc_globs_are_safe() {
         ("avatar-cache", "C:/Users/test/Documents/xwechat_files/all_users/head_imgs/aa/foo"),
         ("apm-records", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/apm_record/process_duration/x"),
         ("received-files", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/file/2026-05/note.pdf"),
-        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/clip.mp4"),
-        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/image/2026-05/photo.jpg"),
+        // 4.x 实测：image/video 共用 msg/video/<YYYY-MM>/ 目录，按后缀分流。
+        // 真实命名包含 `<hash>.mp4`（视频）、`<hash>_raw.mp4`（高清版）、
+        // `<hash>.jpg`（图片）、`<hash>_thumb.jpg`（视频缩略图）。
+        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc123.mp4"),
+        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc123_raw.mp4"),
+        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/photo123.jpg"),
+        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc123_thumb.jpg"),
+        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/sticker.png"),
         ("voice-attachments", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/attach/abc/voice.amr"),
         ("chat-backups", "C:/Users/test/Documents/xwechat_files/Backup/wxid_aaa/data.bak"),
         ("app-logs-crashes", "C:/Users/test/AppData/Roaming/Tencent/xwechat/log/player/x.log"),
         ("app-logs-crashes", "C:/Users/test/AppData/Roaming/Tencent/xwechat/crashinfo/reports/x.dmp"),
         ("app-update-leftover", "C:/Users/test/AppData/Roaming/Tencent/xwechat/update/download/x.exe"),
         ("app-update-leftover", "C:/Users/test/AppData/Roaming/Tencent/xwechat/confsdk/x.cfg"),
+        // 3.x 两套并存路径：path_one 顶层（Image/Image, Video, Files, Attachment）
+        // + path_two FileStorage/* —— 都要被对应 scope 命中。
         ("image-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Image/2026-05/img.dat"),
+        ("image-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/Image/Image/2026-05/img.dat"),
         ("video-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Video/clip.mp4"),
+        ("video-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/Video/2026-05/clip.mp4"),
         ("file-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/File/note.pdf"),
+        ("file-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/Files/2026-05/note.pdf"),
         ("voice-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Voice2/2026-05/v.amr"),
         ("voice-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Voice/old.amr"),
         ("msg-attach-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/MsgAttach/abc/Image/Thumb_x.dat"),
@@ -113,6 +124,7 @@ fn wechat_pc_globs_are_safe() {
         ("sticker-cache-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Emotion/x.gif"),
         ("temp-files-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Temp/dl_part.tmp"),
         ("cache-misc-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/FileStorage/Cache/x"),
+        ("cache-misc-3x", "C:/Users/test/Documents/WeChat Files/wxid_legacy/Attachment/2026-05/thumb.dat"),
         ("app-logs-crashes-3x", "C:/Users/test/AppData/Roaming/Tencent/WeChat/Log/2026/x.log"),
         ("app-logs-crashes-3x", "C:/Users/test/AppData/Roaming/Tencent/WeChat/Logs/x.log"),
         ("app-logs-crashes-3x", "C:/Users/test/AppData/Roaming/Tencent/WeChat/CrashReport/x.dmp"),
@@ -124,6 +136,22 @@ fn wechat_pc_globs_are_safe() {
         assert!(
             hits.contains(expected_id),
             "expected scope `{expected_id}` to match `{p}`, but matched {hits:?}",
+        );
+    }
+
+    // 4.x 图片/视频共用 msg/video/ 树，按后缀分流。两个桶必须互斥——
+    // 不允许 .mp4 同时落到 received-images，也不允许 .jpg 落到 received-videos。
+    let cross_bucket: &[(&str, &str)] = &[
+        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.mp4"),
+        ("received-images", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_raw.mp4"),
+        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc.jpg"),
+        ("received-videos", "C:/Users/test/Documents/xwechat_files/wxid_aaa_bbb/msg/video/2026-05/abc_thumb.jpg"),
+    ];
+    for (forbidden_id, p) in cross_bucket {
+        let hits = matching_scopes(&scopes, p);
+        assert!(
+            !hits.contains(forbidden_id),
+            "scope `{forbidden_id}` must NOT match `{p}` (cross-bucket leak); got {hits:?}",
         );
     }
 
