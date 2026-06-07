@@ -71,8 +71,8 @@ export function Settings({ onClose }: Props) {
   };
 
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-bg" onPointerDown={onClose}>
+      <div className="modal" onPointerDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>AI 顾问设置 {saved && <CheckCircle2 size={16} style={{ verticalAlign: 'middle', marginLeft: 6, color: 'var(--pink-deep)' }} />}</div>
           <button className="ghost icon" onClick={onClose}><X size={16} /></button>
