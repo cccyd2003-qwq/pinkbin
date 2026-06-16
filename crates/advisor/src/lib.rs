@@ -78,10 +78,40 @@ Rules:
 - Do not include any prose outside the JSON object."#;
 
 pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result<AdvisorResponse> {
+    let user_prompt = serde_json::to_string_pretty(req)?;
+    let raw = complete_text(provider, SYSTEM, &user_prompt, ResponseMode::Json).await?;
+
+    let parsed: AdvisorResponse =
+        serde_json::from_str(&raw).or_else(|_| serde_json::from_str(strip_codefence(&raw)))?;
+    Ok(parsed)
+}
+
+pub async fn chat(provider: &Provider, system: &str, user: &str) -> anyhow::Result<String> {
+    let text = complete_text(provider, system, user, ResponseMode::Plain)
+        .await?
+        .trim()
+        .to_string();
+    if text.is_empty() {
+        anyhow::bail!("empty response from advisor chat");
+    }
+    Ok(text)
+}
+
+#[derive(Clone, Copy)]
+enum ResponseMode {
+    Json,
+    Plain,
+}
+
+async fn complete_text(
+    provider: &Provider,
+    system: &str,
+    user_prompt: &str,
+    mode: ResponseMode,
+) -> anyhow::Result<String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
-    let user_prompt = serde_json::to_string_pretty(req)?;
 
     let raw = match provider {
         Provider::OpenAI {
@@ -89,14 +119,16 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
             model,
             base_url,
         } => {
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "model": model,
-                "response_format": { "type": "json_object" },
                 "messages": [
-                    { "role": "system", "content": SYSTEM },
+                    { "role": "system", "content": system },
                     { "role": "user",   "content": user_prompt }
                 ]
             });
+            if matches!(mode, ResponseMode::Json) {
+                body["response_format"] = serde_json::json!({ "type": "json_object" });
+            }
             let r = client
                 .post(format!(
                     "{}/chat/completions",
@@ -108,10 +140,7 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
                 .await?
                 .error_for_status()?;
             let v: serde_json::Value = r.json().await?;
-            v["choices"][0]["message"]["content"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("openai: missing message.content"))?
-                .to_string()
+            extract_openai_text(&v)?.to_string()
         }
         Provider::Anthropic {
             api_key,
@@ -120,8 +149,8 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
         } => {
             let body = serde_json::json!({
                 "model": model,
-                "max_tokens": 2048,
-                "system": SYSTEM,
+                "max_tokens": if matches!(mode, ResponseMode::Json) { 2048 } else { 4096 },
+                "system": system,
                 "messages": [{ "role": "user", "content": user_prompt }]
             });
             let r = client
@@ -133,42 +162,24 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
                 .await?
                 .error_for_status()?;
             let v: serde_json::Value = r.json().await?;
-            // extended-thinking 模型先返 {type:"thinking",...} 再返 {type:"text",...},
-            // 不能假设 content[0] 是 text；遍历 content 数组拼所有 text block。
-            let text = v["content"]
-                .as_array()
-                .map(|blocks| {
-                    blocks
-                        .iter()
-                        .filter(|b| b["type"] == "text")
-                        .filter_map(|b| b["text"].as_str())
-                        .collect::<Vec<_>>()
-                        .join("")
-                })
-                .unwrap_or_default();
-            if text.trim().is_empty() {
-                let stop = v["stop_reason"].as_str().unwrap_or("unknown");
-                if stop == "max_tokens" {
-                    anyhow::bail!(
-                        "anthropic: 没拿到 text block (stop_reason=max_tokens) — 模型在 thinking 阶段被截断, 把 max_tokens 调大重试"
-                    );
-                }
-                anyhow::bail!("anthropic: 没拿到 text block (stop_reason={stop})");
-            }
-            text
+            extract_anthropic_text(&v)?
         }
         Provider::Gemini {
             api_key,
             model,
             base_url,
         } => {
-            let body = serde_json::json!({
-                "systemInstruction": { "parts": [{ "text": SYSTEM }] },
-                "contents": [{ "role": "user", "parts": [{ "text": user_prompt }] }],
-                "generationConfig": {
+            let generation_config = match mode {
+                ResponseMode::Json => serde_json::json!({
                     "responseMimeType": "application/json",
                     "temperature": 0.2
-                }
+                }),
+                ResponseMode::Plain => serde_json::json!({ "temperature": 0.4 }),
+            };
+            let body = serde_json::json!({
+                "systemInstruction": { "parts": [{ "text": system }] },
+                "contents": [{ "role": "user", "parts": [{ "text": user_prompt }] }],
+                "generationConfig": generation_config
             });
             let url = format!(
                 "{}/v1beta/models/{}:generateContent?key={}",
@@ -183,23 +194,20 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
                 .await?
                 .error_for_status()?;
             let v: serde_json::Value = r.json().await?;
-            v["candidates"][0]["content"]["parts"][0]["text"]
-                .as_str()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("gemini: missing candidates[0].content.parts[0].text")
-                })?
-                .to_string()
+            extract_gemini_text(&v)?.to_string()
         }
         Provider::Ollama { base_url, model } => {
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "model": model,
-                "format": "json",
                 "stream": false,
                 "messages": [
-                    { "role": "system", "content": SYSTEM },
+                    { "role": "system", "content": system },
                     { "role": "user",   "content": user_prompt }
                 ]
             });
+            if matches!(mode, ResponseMode::Json) {
+                body["format"] = serde_json::json!("json");
+            }
             let r = client
                 .post(format!("{}/api/chat", base_url.trim_end_matches('/')))
                 .json(&body)
@@ -207,16 +215,54 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
                 .await?
                 .error_for_status()?;
             let v: serde_json::Value = r.json().await?;
-            v["message"]["content"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("ollama: missing message.content"))?
-                .to_string()
+            extract_ollama_text(&v)?.to_string()
         }
     };
+    Ok(raw)
+}
 
-    let parsed: AdvisorResponse =
-        serde_json::from_str(&raw).or_else(|_| serde_json::from_str(strip_codefence(&raw)))?;
-    Ok(parsed)
+fn extract_openai_text(v: &serde_json::Value) -> anyhow::Result<&str> {
+    v["choices"][0]["message"]["content"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("openai: missing message.content"))
+}
+
+fn extract_anthropic_text(v: &serde_json::Value) -> anyhow::Result<String> {
+    // extended-thinking 模型先返 {type:"thinking",...} 再返 {type:"text",...},
+    // 不能假设 content[0] 是 text；遍历 content 数组拼所有 text block。
+    let text = v["content"]
+        .as_array()
+        .map(|blocks| {
+            blocks
+                .iter()
+                .filter(|b| b["type"] == "text")
+                .filter_map(|b| b["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .unwrap_or_default();
+    if text.trim().is_empty() {
+        let stop = v["stop_reason"].as_str().unwrap_or("unknown");
+        if stop == "max_tokens" {
+            anyhow::bail!(
+                "anthropic: 没拿到 text block (stop_reason=max_tokens) — 模型在 thinking 阶段被截断, 把 max_tokens 调大重试"
+            );
+        }
+        anyhow::bail!("anthropic: 没拿到 text block (stop_reason={stop})");
+    }
+    Ok(text)
+}
+
+fn extract_gemini_text(v: &serde_json::Value) -> anyhow::Result<&str> {
+    v["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("gemini: missing candidates[0].content.parts[0].text"))
+}
+
+fn extract_ollama_text(v: &serde_json::Value) -> anyhow::Result<&str> {
+    v["message"]["content"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("ollama: missing message.content"))
 }
 
 fn strip_codefence(s: &str) -> &str {
@@ -224,4 +270,53 @@ fn strip_codefence(s: &str) -> &str {
     let s = s.strip_prefix("```json").unwrap_or(s);
     let s = s.strip_prefix("```").unwrap_or(s);
     s.strip_suffix("```").unwrap_or(s).trim()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_json_code_fence() {
+        assert_eq!(
+            strip_codefence("```json\n{\"ok\":true}\n```"),
+            "{\"ok\":true}"
+        );
+        assert_eq!(strip_codefence("```\nhello\n```"), "hello");
+    }
+
+    #[test]
+    fn extracts_text_from_provider_shapes() {
+        let openai = serde_json::json!({
+            "choices": [{ "message": { "content": "openai text" } }]
+        });
+        assert_eq!(extract_openai_text(&openai).unwrap(), "openai text");
+
+        let anthropic = serde_json::json!({
+            "content": [
+                { "type": "thinking", "thinking": "hidden" },
+                { "type": "text", "text": "hello " },
+                { "type": "text", "text": "world" }
+            ]
+        });
+        assert_eq!(extract_anthropic_text(&anthropic).unwrap(), "hello world");
+
+        let gemini = serde_json::json!({
+            "candidates": [{ "content": { "parts": [{ "text": "gemini text" }] } }]
+        });
+        assert_eq!(extract_gemini_text(&gemini).unwrap(), "gemini text");
+
+        let ollama = serde_json::json!({ "message": { "content": "ollama text" } });
+        assert_eq!(extract_ollama_text(&ollama).unwrap(), "ollama text");
+    }
+
+    #[test]
+    fn anthropic_empty_text_reports_stop_reason() {
+        let value = serde_json::json!({
+            "stop_reason": "max_tokens",
+            "content": [{ "type": "thinking", "thinking": "..." }]
+        });
+        let err = extract_anthropic_text(&value).unwrap_err().to_string();
+        assert!(err.contains("stop_reason=max_tokens"));
+    }
 }

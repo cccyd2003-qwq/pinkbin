@@ -31,7 +31,7 @@ ntfs               = "0.4"
 windows-sys        = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Registry"] }
 globset            = "0.4"
 trash              = "5"
-reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest            = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "system-proxy"] }
 tokio              = { version = "1", features = ["full"] }
 once_cell          = "1"
 chrono             = { version = "0.4", features = ["serde"] }
