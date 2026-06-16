@@ -241,6 +241,8 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
   const imgs = images ?? [];
 
   if (isTauri && imgs.length === 0) {
+    // Backend requests bypass browser CORS preflight; keep image chat on the
+    // browser path because provider-specific vision payloads already work here.
     await syncAdvisorToBackend(settings);
     return invoke<string>('advisor_chat', { system, user: fullUser });
   }

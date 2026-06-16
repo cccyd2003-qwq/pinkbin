@@ -75,6 +75,8 @@ export default function App() {
   };
   useEffect(() => {
     refreshAdvisorTag();
+    // Settings live in localStorage; after a restart, hydrate Rust state so
+    // backend advisor commands work before the user reopens Settings.
     syncAdvisorToBackend().catch(() => {});
   }, []);
   const [leftWidth, setLeftWidth] = useState<number>(() => {
