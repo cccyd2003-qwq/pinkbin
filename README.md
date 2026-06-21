@@ -24,15 +24,9 @@
 
 <div align="center">
 
-### NovaDiffusion API
+<a href="https://api.novadiffusion.com/"><img src="docs/sponsors/novadiffusion.png" alt="NovaDiffusion API — 全网最靠谱、最安全、几乎最实惠的满血 Claude / GPT" width="760"></a>
 
-**全网最靠谱、最安全、几乎最实惠的满血 Claude / GPT。**
-
-无降智、无限速、稳定直连,价格几乎全网最低。
-
-<a href="https://api.novadiffusion.com/"><img src="https://img.shields.io/badge/🚀_满血_Claude_/_GPT_·_NovaDiffusion-ff69b4?style=for-the-badge" height="42"></a>
-
-👉 **[api.novadiffusion.com](https://api.novadiffusion.com/)**
+**全网最靠谱、最安全、几乎最实惠的满血 Claude / GPT** · 👉 **[api.novadiffusion.com](https://api.novadiffusion.com/)**
 
 </div>
 
