@@ -29,6 +29,12 @@ Thumbs.db
 
 # Claude Code（每台机器独立的本地权限/设置；shared 的 settings.json 仍入库）
 .claude/settings.local.json
+# 个人 agent 团队（含个人模型/成本偏好，不强加给合作者）
+.claude/agents/
+# 个人备忘（本地 to-decide 清单 / 工作日志，不强加给合作者）
+NOTES-*.md
+# Playwright MCP 浏览器调试产物（截图/快照）
+.playwright-mcp/
 
 # Local env / secrets
 .env
