@@ -831,6 +831,25 @@ footer {
 .seg-opt:last-child { border-right: 0; }
 .seg-opt:hover { background: var(--pink-bg); }
 .seg-opt.active { background: var(--pink); color: var(--ink); }
+.seg-5 { grid-template-columns: repeat(5, 1fr); }
+.seg-5 .seg-opt { padding: 8px 4px; font-size: 10.5px; text-align: center; }
+
+/* Base URL 下方的协议识别标签 + 手动开关入口 */
+.provider-detect {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: -4px;
+}
+.provider-detect-toggle {
+  background: none;
+  border: 0;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+.provider-detect-toggle:hover { color: var(--pink-deep); }
 
 .hint {
   margin: 0;

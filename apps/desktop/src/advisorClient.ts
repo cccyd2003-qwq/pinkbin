@@ -12,9 +12,29 @@ export interface AdvisorSettings {
   model: string;
   apiKey: string;
   baseUrl: string;
+  /** 用户在 Settings 里手动指定的协议，覆盖 detectProvider 的自动判断；不存在则走自动识别。 */
+  providerOverride?: Provider;
 }
 
 const STORAGE_KEY = 'pinkbin.advisor';
+
+// 从 Base URL 猜协议，让用户不用管"协议"这个概念。覆盖的是用户实际会遇到的
+// case；其余一律落到 OpenAI（中转 / 国产大模型事实上的通用标准）。
+// 11434 是 Ollama 默认端口；本机跑的 OpenAI 兼容中转（one-api/new-api/vLLM/
+// LM Studio 等，如 http://localhost:20128/v1）同样常绑在 localhost，不能靠
+// "本地地址"判 ollama——之前 localhost/127.0.0.1 判据把这类中转错判成
+// ollama，请求打到 /api/chat 404。误判后用户在 Settings 里手动指定协议兜底。
+export function detectProvider(baseUrl: string): Provider {
+  const u = baseUrl.toLowerCase();
+  if (!u) return 'openai';
+  if (u.includes('11434') || u.includes('/api/chat')) return 'ollama';
+  // 识别带 anthropic 字样的代理子域名（如 anthropic.novadiffusion.com），
+  // 不仅是官方 anthropic.com。误识别风险极小——OpenAI 协议代理几乎不会
+  // 把 anthropic 写进域名里。
+  if (u.includes('anthropic') || u.includes('/v1/messages')) return 'anthropic';
+  if (u.includes('googleapis.com') || u.includes('generativelanguage')) return 'gemini';
+  return 'openai';
+}
 
 export function loadSettings(): AdvisorSettings | null {
   try {
@@ -22,6 +42,10 @@ export function loadSettings(): AdvisorSettings | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AdvisorSettings;
     if (!parsed.provider || !parsed.model) return null;
+    // 收紧 detectProvider 之前，本机中转（如 localhost:20128/v1）会被误判
+    // 存成 provider: 'ollama'。没手动 override 的老数据在这里按新规则
+    // 用 baseUrl 重判一次，让升级后的用户自动痊愈，不用手动去 Settings 改。
+    if (!parsed.providerOverride) parsed.provider = detectProvider(parsed.baseUrl);
     return parsed;
   } catch {
     return null;

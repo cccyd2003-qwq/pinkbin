@@ -1,26 +1,31 @@
 import { useEffect, useState } from 'react';
-import { X, CheckCircle2, Info, Eye, EyeOff } from 'lucide-react';
+import { X, CheckCircle2, Info, Eye, EyeOff, Settings2 } from 'lucide-react';
 import { api } from '../api';
 import { isTauri } from '../env';
-import { loadSettings, saveSettings, clearSettings, type Provider } from '../advisorClient';
+import {
+  loadSettings,
+  saveSettings,
+  clearSettings,
+  detectProvider,
+  type Provider,
+} from '../advisorClient';
 
 type Props = { onClose: () => void };
 
-// Detect which on-the-wire protocol to use from the Base URL alone, so the
-// user doesn't have to think about "协议". Heuristics cover the cases users
-// actually run into; everything else falls through to OpenAI (the de-facto
-// universal standard for relays + national providers).
-function detectProvider(baseUrl: string): Provider {
-  const u = baseUrl.toLowerCase();
-  if (!u) return 'openai';
-  if (u.includes('11434') || u.includes('localhost') || u.includes('127.0.0.1') || u.includes('/api/chat')) return 'ollama';
-  // 识别带 anthropic 字样的代理子域名（如 anthropic.novadiffusion.com），
-  // 不仅是官方 anthropic.com。误识别风险极小——OpenAI 协议代理几乎不会
-  // 把 anthropic 写进域名里。
-  if (u.includes('anthropic') || u.includes('/v1/messages')) return 'anthropic';
-  if (u.includes('googleapis.com') || u.includes('generativelanguage')) return 'gemini';
-  return 'openai';
-}
+const PROVIDER_LABEL: Record<Provider, string> = {
+  openai: 'OpenAI 兼容',
+  anthropic: 'Anthropic',
+  gemini: 'Gemini',
+  ollama: 'Ollama（本地，免 Key）',
+};
+
+// 手动开关里的选项要短，五个塞在一行；「已识别」标签用完整版说明。
+const PROVIDER_LABEL_SHORT: Record<Provider, string> = {
+  openai: 'OpenAI 兼容',
+  anthropic: 'Anthropic',
+  gemini: 'Gemini',
+  ollama: 'Ollama',
+};
 
 export function Settings({ onClose }: Props) {
   const [baseUrl, setBaseUrl] = useState('');
@@ -30,6 +35,9 @@ export function Settings({ onClose }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // undefined = 自动识别；手动指定时存具体 Provider。默认收起，不常驻展示。
+  const [providerOverride, setProviderOverride] = useState<Provider | undefined>(undefined);
+  const [showManual, setShowManual] = useState(false);
 
   useEffect(() => {
     const existing = loadSettings();
@@ -37,11 +45,12 @@ export function Settings({ onClose }: Props) {
       setModel(existing.model);
       setApiKey(existing.apiKey);
       setBaseUrl(existing.baseUrl);
+      setProviderOverride(existing.providerOverride);
       setSaved(true);
     }
   }, []);
 
-  const provider = detectProvider(baseUrl);
+  const provider = providerOverride ?? detectProvider(baseUrl);
   const needsKey = provider !== 'ollama';
 
   const save = async () => {
@@ -50,7 +59,7 @@ export function Settings({ onClose }: Props) {
     if (!model.trim())   { setErr('请填 Model 名'); return; }
     if (needsKey && !apiKey.trim()) { setErr('请填 API Key'); return; }
     try {
-      saveSettings({ provider, model, apiKey, baseUrl });
+      saveSettings({ provider, model, apiKey, baseUrl, providerOverride });
       if (isTauri) {
         await api.setAdvisor(provider, model, needsKey ? apiKey : undefined, baseUrl);
       }
@@ -66,6 +75,8 @@ export function Settings({ onClose }: Props) {
     setApiKey('');
     setBaseUrl('');
     setModel('');
+    setProviderOverride(undefined);
+    setShowManual(false);
     setSaved(false);
     setMsg('已清除本地保存的配置');
   };
@@ -91,6 +102,41 @@ export function Settings({ onClose }: Props) {
             placeholder="https://api.openai.com/v1"
           />
         </label>
+
+        {baseUrl.trim() && (
+          <div className="provider-detect">
+            <span className="badge">
+              已识别：{PROVIDER_LABEL[provider]}
+              {providerOverride && ' · 手动'}
+            </span>
+            <button type="button" className="provider-detect-toggle" onClick={() => setShowManual((v) => !v)}>
+              <Settings2 size={11} />
+              手动指定
+            </button>
+          </div>
+        )}
+
+        {baseUrl.trim() && showManual && (
+          <div className="seg seg-5">
+            <button
+              type="button"
+              className={`seg-opt${providerOverride === undefined ? ' active' : ''}`}
+              onClick={() => setProviderOverride(undefined)}
+            >
+              自动
+            </button>
+            {(Object.keys(PROVIDER_LABEL) as Provider[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                className={`seg-opt${providerOverride === p ? ' active' : ''}`}
+                onClick={() => setProviderOverride(p)}
+              >
+                {PROVIDER_LABEL_SHORT[p]}
+              </button>
+            ))}
+          </div>
+        )}
 
         {needsKey && (
           <label className="field">
