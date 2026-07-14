@@ -2259,6 +2259,7 @@ footer {
 .steam-list-wrap {
   display: flex; flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 .steam-search {
   display: flex; align-items: center; gap: 8px;
