@@ -178,6 +178,7 @@ cargo test --workspace    # 全工作空间测试
   - [SquirrelDisk](https://github.com/adileo/squirreldisk) —— Tauri + Rust 实现参考
 - **依赖巨人的肩膀**：[Tauri](https://tauri.app) · [`d3-hierarchy`](https://github.com/d3/d3-hierarchy) · [`jwalk`](https://github.com/jessegrosjean/jwalk) · [`ntfs`](https://github.com/ColinFinck/ntfs) · [`globset`](https://github.com/BurntSushi/ripgrep/tree/master/crates/globset) · [`trash-rs`](https://github.com/Byron/trash-rs) · [react-markdown](https://github.com/remarkjs/react-markdown)
 - **协作**：[Claude Code](https://claude.com/claude-code) · [@jtlyu](https://github.com/jtlyu)（性能优化 + WeChat 4.x 重写 + scaffold harness 工作流基建）
+- **QwenPaw 兼容版（`qwenpaw-skill`）**：`skills/disk-cleanup/` 目录以 QwenPaw Skill 格式封装 CLI 版 scanner/executor/scaffold，详见 [SKILL.md](skills/disk-cleanup/SKILL.md)
 ---
 
 ## License

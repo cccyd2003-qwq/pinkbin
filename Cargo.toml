@@ -7,6 +7,11 @@ members = [
   "crates/advisor",
   "crates/scaffold-lint",
   "crates/steam-inspector",
+  "crates/guard",
+  "crates/dedup",
+  "crates/inventory",
+  "crates/system-ops",
+  "crates/cli",
   "apps/desktop/src-tauri",
 ]
 
@@ -40,6 +45,7 @@ dirs               = "5"
 shellexpand        = "3"
 tempfile           = "3"
 include_dir        = "0.7"
+clap               = { version = "4", features = ["derive", "env"] }
 
 [profile.release]
 opt-level = 3
