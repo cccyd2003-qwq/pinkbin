@@ -53,8 +53,8 @@ struct Cli {
 
     /// 触发 UAC 提权重启(仅 Windows)。检测到非管理员时,会弹 UAC 提示,
     /// 用户同意后以管理员身份重启本 CLI,执行相同子命令。
-    /// 用于 scan --mft / hibernate off / pagefile migrate / restore delete-all
-    /// 等需要管理员的操作。agent 用法:`pinkbin-cli --elevate scan --mft C:\`。
+    /// 用于 hibernate off / pagefile migrate / restore delete-all
+    /// 等需要管理员的操作。agent 用法:`pinkbin-cli --elevate scan C:\`。
     #[arg(long, global = true, default_value_t = false)]
     elevate: bool,
 
@@ -79,11 +79,6 @@ enum Cmd {
         /// Output format: json (default) | summary (text only).
         #[arg(long, default_value = "json")]
         format: String,
-        /// 启用 NTFS MFT 直读快速路径(仅 Windows + 管理员)。
-        /// 默认禁用 —— `ntfs` crate 在异常 MFT 记录上会段错误导致 CLI abort。
-        /// 显式启用 = 调用方承担崩溃风险。walkdir fallback 永远可靠。
-        #[arg(long, default_value_t = false)]
-        mft: bool,
     },
 
     /// Extract a directory's metadata summary — the JSON to feed an agent
@@ -141,9 +136,6 @@ enum Cmd {
         /// How many top entries to include in the summary.
         #[arg(long, default_value_t = 50)]
         top: usize,
-        /// 启用 NTFS MFT 直读快速路径(同 Scan --mft)。
-        #[arg(long, default_value_t = false)]
-        mft: bool,
     },
 
     /// Find duplicate files (three-phase: size → head-hash → full-hash).
@@ -320,8 +312,8 @@ fn main() -> anyhow::Result<()> {
     tracing::info!("loaded {} scaffolds from {:?}", scaffolds.len(), scaffolds_dir);
 
     match cli.command {
-        Cmd::Scan { path, max_depth, format, mft } => {
-            cmd_scan(&path, max_depth, &format, &scaffolds, mft)
+        Cmd::Scan { path, max_depth, format } => {
+            cmd_scan(&path, max_depth, &format, &scaffolds)
         }
         Cmd::Inspect { path, samples } => {
             cmd_inspect(&path, samples)
@@ -346,8 +338,8 @@ fn main() -> anyhow::Result<()> {
                 &quarantine_root,
             )
         }
-        Cmd::Analyze { path, top, mft } => {
-            cmd_analyze(&path, top, &scaffolds, mft)
+        Cmd::Analyze { path, top } => {
+            cmd_analyze(&path, top, &scaffolds)
         }
         Cmd::Dedup { path, min_size, top } => {
             cmd_dedup(&path, min_size, top)
@@ -392,11 +384,9 @@ fn cmd_scan(
     max_depth: Option<usize>,
     format: &str,
     scaffolds: &[Scaffold],
-    use_mft: bool,
 ) -> anyhow::Result<()> {
     let opts = ScanOptions {
         max_depth,
-        use_mft,
         ..Default::default()
     };
     let compiled = compile_all(scaffolds);
@@ -801,9 +791,9 @@ struct ScaffoldMatch {
     file_count: u64,
 }
 
-fn cmd_analyze(path: &Path, top: usize, scaffolds: &[Scaffold], use_mft: bool) -> anyhow::Result<()> {
+fn cmd_analyze(path: &Path, top: usize, scaffolds: &[Scaffold]) -> anyhow::Result<()> {
     let compiled = compile_all(scaffolds);
-    let opts = ScanOptions { use_mft, ..Default::default() };
+    let opts = ScanOptions::default();
     let (mut node, stats) = scan_with_stats(path.to_path_buf(), opts, |_| {})?;
     tag_and_truncate(&mut node, &compiled, 0);
 

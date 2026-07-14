@@ -40,8 +40,8 @@ changelog: CHANGELOG.md
 ## 提权与扫描速度
 
 - **默认走 walkdir**(稳定可靠),大目录扫描几十秒到几分钟正常
-- **`--elevate`**(全局 flag):需管理员权限的操作(hibernate off / pagefile migrate / restore delete-all / execute winsxs / execute windows-old / scan --mft)自动弹 UAC;用户拒绝时返回 `{"error":"elevation_failed",...}`,改为引导用户右键终端"以管理员身份运行"
-- **`--mft`**(默认禁用,不主动推荐):NTFS $MFT 直读快速路径,需 `--elevate`;`ntfs` crate 在异常 MFT 记录上会段错误导致 CLI abort,仅在用户抱怨扫描慢且接受崩溃风险时建议
+- **`--elevate`**(全局 flag):需管理员权限的操作(hibernate off / pagefile migrate / restore delete-all / execute winsxs / execute windows-old)自动弹 UAC;用户拒绝时返回 `{"error":"elevation_failed",...}`,改为引导用户右键终端"以管理员身份运行"
+- **MFT 快速路径(默认开启)**:NTFS $MFT 直读快速路径,Windows 上默认优先尝试,失败自动降级到 walkdir;`catch_unwind` 兜底,不主动建议用户关闭
 - 详见 [references/mft-fix.md](references/mft-fix.md)
 
 ## 安全红线(速查)
@@ -56,7 +56,6 @@ changelog: CHANGELOG.md
 | **WinSxS** | 只走 DISM(system_cmd),绝不直接删文件;ResetBase 不可逆需明确确认 |
 | **uninstall** | guard block 时绝不执行;多匹配不猜测,要精确名称 |
 | **migrate-app** | 不删原目录,验证新路径可用后用户手动删 |
-| **`--mft`** | 默认禁用,只在用户抱怨慢且接受崩溃风险时建议;必须配合 `--elevate` |
 | **`--elevate` 失败** | 不重试,降级为引导用户手动以管理员身份运行 |
 
 ## 输出格式

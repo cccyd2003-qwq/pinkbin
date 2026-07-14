@@ -17,22 +17,11 @@ skills/disk-cleanup/bin/pinkbin-cli.exe analyze "C:\\" --top 50
 - top 5 大目录(路径 + 大小)
 - 已识别的可清理项(`scaffold_matches`:scaffold_id + path + size)
 
-**扫描速度说明**(默认走 walkdir,稳定可靠):
+**扫描速度说明**:
 - 大目录(C 盘 100 万+ 文件)首次扫描可能需几十秒到几分钟,告知用户这正常
-- `stats.mode` 字段会显示 `"walkdir"` 或 `"mft"`(若启用了快速路径)
-- **不要**主动建议 `--mft` 给用户,除非用户明确抱怨扫描太慢且愿意承担崩溃风险
-
-**MFT 快速路径(`--mft`,可选,默认禁用)**:
-
-```
-skills/disk-cleanup/bin/pinkbin-cli.exe --elevate analyze "C:\\" --top 50 --mft
-```
-
-- 直接读 NTFS $MFT,大目录扫描可从分钟级降到秒级
-- **需要管理员权限**(打开卷设备 `\\.\C:` 是特权操作),必须配合 `--elevate` 使用
-- **风险**:`ntfs` crate 在异常 MFT 记录上可能触发 unsafe 段段错误,导致整个 CLI 进程 abort(`catch_unwind` 接不住段错误)。一旦 abort,本次扫描无输出。
-- **何时考虑建议**:用户主动抱怨扫描慢 + 接受崩溃风险 + 愿意点 UAC 提示
-- **不要**作为默认推荐
+- `stats.mode` 字段会显示 `"mft"`(成功使用 MFT 快速路径)或 `"walkdir"`(降级到普通遍历)
+- **MFT 快速路径默认开启**:Windows 上优先尝试 NTFS $MFT 直读,大目录扫描可从分钟级降到秒级
+- 失败时自动降级到 walkdir,`catch_unwind` 兜底,不影响正常输出
 
 详见 [mft-fix.md](mft-fix.md)。
 
@@ -380,7 +369,7 @@ BIN migrate-app "C:\Program Files\App" D --dry-run false
 
 ## 提权机制(`--elevate`,全局 flag)
 
-许多操作需要管理员权限:`scan --mft` / `hibernate off` / `pagefile migrate` / `restore delete-all` / `execute winsxs` / `execute windows-old`。两种用法:
+许多操作需要管理员权限:`hibernate off` / `pagefile migrate` / `restore delete-all` / `execute winsxs` / `execute windows-old`。两种用法:
 
 1. **推荐**:让 agent 自动调 `--elevate`,CLI 会弹 UAC,用户同意后自动以管理员身份重启自己并执行:
    ```

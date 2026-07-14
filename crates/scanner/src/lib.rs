@@ -68,15 +68,6 @@ pub struct ScanOptions {
     pub max_depth: Option<usize>,
     /// How many files to keep per directory in the returned tree. None = all (memory hog on large dirs).
     pub keep_files_per_dir: Option<usize>,
-    /// 是否启用 NTFS MFT 直读快速路径(仅 Windows + 管理员)。
-    ///
-    /// **默认 false**。原因:`ntfs` crate 在异常 MFT 记录(损坏 / ReFS /
-    /// 某些被锁定的卷)上会触发 unsafe 段的 access violation,
-    /// `catch_unwind` 接不住段错误,会导致整个进程 abort。
-    /// 走 walkdir 虽然慢但稳定可靠。
-    ///
-    /// 用户/agent 显式 `--mft` 后才尝试 MFT,崩溃风险由调用方承担。
-    pub use_mft: bool,
 }
 
 impl Default for ScanOptions {
@@ -85,7 +76,6 @@ impl Default for ScanOptions {
             follow_symlinks: false,
             max_depth: None,
             keep_files_per_dir: Some(500),
-            use_mft: false,
         }
     }
 }
@@ -142,13 +132,9 @@ where
     let mut stats = ScanStats::default();
     tracing::info!("scan: start root={:?}", root);
 
-    // Try the MFT fast path on Windows when explicitly requested via ScanOptions.
-    // 默认禁用:`ntfs` crate 在异常 MFT 记录上会段错误(unsafe 段 access
-    // violation),catch_unwind 接不住,会导致整个进程 abort。
-    // 仅当 opts.use_mft = true(对应 CLI `--mft`)时才尝试。
+    // Try the MFT fast path on Windows when the root is on an NTFS volume.
     #[cfg(windows)]
     {
-        if opts.use_mft {
         if let Some(letter) = drive_letter_of(&root) {
             let subroot = if is_drive_root(&root) {
                 None
