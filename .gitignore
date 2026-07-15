@@ -65,3 +65,7 @@ apps/desktop/src-tauri/icon-source.png
 # GitHub-hosted Windows runners (rsproxy.cn flaky from US/EU). Set in
 # ~/.cargo/config.toml (user-level) instead.
 .cargo/
+
+# QwenPaw Skill: 编译产物不进 git,走 Release 分发
+skills/disk-cleanup/bin/*.exe
+skills/disk-cleanup/bin/*.dll
