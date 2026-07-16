@@ -1,9 +1,12 @@
-// Browser-side AI advisor client — talks to OpenAI / Anthropic / Ollama directly
-// from the browser, so the preview mode can give real answers.
+// AI advisor client. Browser preview talks to providers directly. In the
+// packaged Tauri app, text-only chat goes through the backend so compatible
+// OpenAI relays do not need browser CORS support.
 //
 // Settings persist to localStorage under "pinkbin.advisor".
 
+import { invoke } from '@tauri-apps/api/core';
 import type { AdvisorRequest, AdvisorResponse } from './types';
+import { isTauri } from './env';
 
 export type Provider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
@@ -203,6 +206,16 @@ export function isConfigured(s: AdvisorSettings | null): s is AdvisorSettings {
   return Boolean(s.apiKey && s.model);
 }
 
+export async function syncAdvisorToBackend(settings = loadSettings()): Promise<void> {
+  if (!isTauri || !isConfigured(settings)) return;
+  await invoke<void>('set_advisor', {
+    provider: settings.provider,
+    apiKey: settings.provider === 'ollama' ? null : settings.apiKey,
+    model: settings.model,
+    baseUrl: settings.baseUrl || null,
+  });
+}
+
 const CHAT_SYSTEM = `You are Pinkbin's AI advisor — a friendly assistant that helps users figure out what their disk folders are and whether to delete them. Use the metadata you are given (the user's question references a folder by its path, size, samples). Be concise (2-4 sentences), in the user's language. If you suggest deleting, say what to delete (the whole folder vs a sub-scope) and via what mechanism (回收站 / 手动整理 / 卸载应用). Never recommend rm -rf on system paths.`;
 
 const OVERVIEW_SYSTEM = `You are Pinkbin's AI advisor. The user just finished scanning their disk. You receive a JSON summary of the largest folders. Write a friendly Chinese overview (~180-220 字) covering, in order, with empty lines between sections:
@@ -250,6 +263,13 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
   }
   const fullUser = user;
   const imgs = images ?? [];
+
+  if (isTauri && imgs.length === 0) {
+    // Backend requests bypass browser CORS preflight; keep image chat on the
+    // browser path because provider-specific vision payloads already work here.
+    await syncAdvisorToBackend(settings);
+    return invoke<string>('advisor_chat', { system, user: fullUser });
+  }
 
   if (settings.provider === 'openai') {
     const url = (settings.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');

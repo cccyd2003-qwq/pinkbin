@@ -4,7 +4,9 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use include_dir::{include_dir, Dir};
-use pinkbin_advisor::{advise as advise_provider, AdvisorRequest, AdvisorResponse, Provider};
+use pinkbin_advisor::{
+    advise as advise_provider, chat as chat_provider, AdvisorRequest, AdvisorResponse, Provider,
+};
 use pinkbin_executor::{execute, Plan, UndoEntry};
 use pinkbin_scaffold::{
     compile_all, detect_compiled, detect_for, expand_env, load_dir, parse_toml, CompiledScaffold,
@@ -852,6 +854,23 @@ async fn advise(
 }
 
 #[tauri::command]
+async fn advisor_chat(
+    state: State<'_, AppState>,
+    system: String,
+    user: String,
+) -> Result<String, String> {
+    let provider = state
+        .advisor
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "advisor not configured — open Settings".to_string())?;
+    chat_provider(&provider, &system, &user)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn inspect_path(path: String, sample_count: usize) -> Vec<String> {
     sample_paths(&path, sample_count)
 }
@@ -1332,6 +1351,7 @@ pub fn run() {
             execute_scope,
             list_conda_envs,
             advise,
+            advisor_chat,
             inspect_path,
             reveal_in_explorer,
             execute_plan,

@@ -13,7 +13,7 @@ import { Splitter } from './components/Splitter';
 import { Logo } from './components/Logo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { formatBytes } from './format';
-import { loadSettings, isConfigured } from './advisorClient';
+import { loadSettings, isConfigured, syncAdvisorToBackend } from './advisorClient';
 
 function isDriveRoot(p: string): boolean {
   // C: / C:\ / C:/  — anything beyond is a subfolder
@@ -73,7 +73,12 @@ export default function App() {
     const s = loadSettings();
     setAdvisorTag(isConfigured(s) ? { provider: s.provider } : null);
   };
-  useEffect(() => { refreshAdvisorTag(); }, []);
+  useEffect(() => {
+    refreshAdvisorTag();
+    // Settings live in localStorage; after a restart, hydrate Rust state so
+    // backend advisor commands work before the user reopens Settings.
+    syncAdvisorToBackend().catch(() => {});
+  }, []);
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     const v = Number(localStorage.getItem('pinkbin.leftWidth'));
     return Number.isFinite(v) && v > MIN_LEFT ? v : DEFAULT_LEFT;
