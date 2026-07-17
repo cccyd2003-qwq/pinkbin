@@ -544,8 +544,8 @@ export function CleanupModal({ scaffold: sc, matches, onClose, onCleaned }: Prop
   }, [isConda, matches, scopeSizes]);
 
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal cleanup-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-bg" onPointerDown={onClose}>
+      <div className="modal cleanup-modal" onPointerDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             清理 · {sc.name}
