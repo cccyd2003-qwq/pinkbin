@@ -87,7 +87,7 @@ export const api = {
     isTauri ? invoke<number>('estimate_size', { path }) : Promise.resolve(0),
 
   setAdvisor: (
-    provider: 'openai' | 'anthropic' | 'gemini' | 'ollama',
+    provider: 'openai' | 'atlas' | 'anthropic' | 'gemini' | 'ollama',
     model: string,
     apiKey?: string,
     baseUrl?: string,

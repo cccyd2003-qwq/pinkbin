@@ -833,6 +833,20 @@ footer {
 .seg-opt.active { background: var(--pink); color: var(--ink); }
 .seg-5 { grid-template-columns: repeat(5, 1fr); }
 .seg-5 .seg-opt { padding: 8px 4px; font-size: 10.5px; text-align: center; }
+.seg-6 { grid-template-columns: repeat(6, 1fr); }
+.seg-6 .seg-opt { padding: 8px 4px; font-size: 10px; text-align: center; }
+
+.provider-presets {
+  display: flex;
+  min-height: 30px;
+}
+.provider-presets .ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
 
 /* Base URL 下方的协议识别标签 + 手动开关入口 */
 .provider-detect {
@@ -2631,4 +2645,3 @@ footer {
   from { background-position: 0% 0%; }
   to   { background-position: -200% 0%; }
 }
-

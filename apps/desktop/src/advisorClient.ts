@@ -5,7 +5,7 @@
 
 import type { AdvisorRequest, AdvisorResponse } from './types';
 
-export type Provider = 'openai' | 'anthropic' | 'gemini' | 'ollama';
+export type Provider = 'openai' | 'atlas' | 'anthropic' | 'gemini' | 'ollama';
 
 export interface AdvisorSettings {
   provider: Provider;
@@ -27,6 +27,7 @@ const STORAGE_KEY = 'pinkbin.advisor';
 export function detectProvider(baseUrl: string): Provider {
   const u = baseUrl.toLowerCase();
   if (!u) return 'openai';
+  if (u.includes('api.atlascloud.ai')) return 'atlas';
   if (u.includes('11434') || u.includes('/api/chat')) return 'ollama';
   // 识别带 anthropic 字样的代理子域名（如 anthropic.novadiffusion.com），
   // 不仅是官方 anthropic.com。误识别风险极小——OpenAI 协议代理几乎不会
@@ -116,8 +117,11 @@ export async function callAdvisor(
   const userPrompt = JSON.stringify(req, null, 2);
   let raw = '';
 
-  if (settings.provider === 'openai') {
-    const url = (settings.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+  if (settings.provider === 'openai' || settings.provider === 'atlas') {
+    const defaultUrl = settings.provider === 'atlas'
+      ? 'https://api.atlascloud.ai/v1'
+      : 'https://api.openai.com/v1';
+    const url = (settings.baseUrl || defaultUrl).replace(/\/$/, '');
     const r = await fetch(`${url}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -251,8 +255,11 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
   const fullUser = user;
   const imgs = images ?? [];
 
-  if (settings.provider === 'openai') {
-    const url = (settings.baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+  if (settings.provider === 'openai' || settings.provider === 'atlas') {
+    const defaultUrl = settings.provider === 'atlas'
+      ? 'https://api.atlascloud.ai/v1'
+      : 'https://api.openai.com/v1';
+    const url = (settings.baseUrl || defaultUrl).replace(/\/$/, '');
     const userContent: unknown = imgs.length === 0
       ? fullUser
       : [
