@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, CheckCircle2, Info, Eye, EyeOff, Settings2 } from 'lucide-react';
+import { X, CheckCircle2, Info, Eye, EyeOff, Settings2, Cloud } from 'lucide-react';
 import { api } from '../api';
 import { isTauri } from '../env';
 import {
@@ -14,14 +14,16 @@ type Props = { onClose: () => void };
 
 const PROVIDER_LABEL: Record<Provider, string> = {
   openai: 'OpenAI 兼容',
+  atlas: 'Atlas Cloud',
   anthropic: 'Anthropic',
   gemini: 'Gemini',
   ollama: 'Ollama（本地，免 Key）',
 };
 
-// 手动开关里的选项要短，五个塞在一行；「已识别」标签用完整版说明。
+// 手动开关里的选项要短，六个塞在一行；「已识别」标签用完整版说明。
 const PROVIDER_LABEL_SHORT: Record<Provider, string> = {
   openai: 'OpenAI 兼容',
+  atlas: 'Atlas Cloud',
   anthropic: 'Anthropic',
   gemini: 'Gemini',
   ollama: 'Ollama',
@@ -52,6 +54,14 @@ export function Settings({ onClose }: Props) {
 
   const provider = providerOverride ?? detectProvider(baseUrl);
   const needsKey = provider !== 'ollama';
+
+  const selectProvider = (nextProvider: Provider) => {
+    setProviderOverride(nextProvider);
+    if (nextProvider === 'atlas') {
+      setBaseUrl('https://api.atlascloud.ai/v1');
+      setModel('deepseek-ai/deepseek-v4-pro');
+    }
+  };
 
   const save = async () => {
     setErr(null); setMsg(null);
@@ -91,8 +101,15 @@ export function Settings({ onClose }: Props) {
 
         <p className="hint">
           <Info size={12} />
-          <span>填你服务商给你的 Base URL、API Key 和模型名。OpenAI、DeepSeek、Kimi、各种中转都直接填就能用；本地 Ollama 不用 Key。</span>
+          <span>填你服务商给你的 Base URL、API Key 和模型名。OpenAI、Atlas Cloud、DeepSeek、Kimi、各种中转都直接填就能用；本地 Ollama 不用 Key。</span>
         </p>
+
+        <div className="provider-presets">
+          <button type="button" className="ghost" onClick={() => selectProvider('atlas')}>
+            <Cloud size={13} />
+            Atlas Cloud
+          </button>
+        </div>
 
         <label className="field">
           <span>Base URL</span>
@@ -117,7 +134,7 @@ export function Settings({ onClose }: Props) {
         )}
 
         {baseUrl.trim() && showManual && (
-          <div className="seg seg-5">
+          <div className="seg seg-6">
             <button
               type="button"
               className={`seg-opt${providerOverride === undefined ? ' active' : ''}`}
@@ -130,7 +147,7 @@ export function Settings({ onClose }: Props) {
                 key={p}
                 type="button"
                 className={`seg-opt${providerOverride === p ? ' active' : ''}`}
-                onClick={() => setProviderOverride(p)}
+                onClick={() => selectProvider(p)}
               >
                 {PROVIDER_LABEL_SHORT[p]}
               </button>

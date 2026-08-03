@@ -1254,19 +1254,23 @@ fn open_steam_url(action: String, appid: u64) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-fn set_advisor(
-    state: State<'_, AppState>,
+fn provider_from_settings(
     provider: String,
     api_key: Option<String>,
     model: String,
     base_url: Option<String>,
-) -> Result<(), String> {
-    let p = match provider.as_str() {
-        "openai" => Provider::OpenAI {
+) -> Result<Provider, String> {
+    Ok(match provider.as_str() {
+        "openai" | "atlas" => Provider::OpenAI {
             api_key: api_key.ok_or_else(|| "api_key required".to_string())?,
             model,
-            base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
+            base_url: base_url.unwrap_or_else(|| {
+                if provider == "atlas" {
+                    "https://api.atlascloud.ai/v1".to_string()
+                } else {
+                    "https://api.openai.com/v1".to_string()
+                }
+            }),
         },
         "anthropic" => Provider::Anthropic {
             api_key: api_key.ok_or_else(|| "api_key required".to_string())?,
@@ -1284,7 +1288,18 @@ fn set_advisor(
                 .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_string()),
         },
         other => return Err(format!("unknown provider: {other}")),
-    };
+    })
+}
+
+#[tauri::command]
+fn set_advisor(
+    state: State<'_, AppState>,
+    provider: String,
+    api_key: Option<String>,
+    model: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let p = provider_from_settings(provider, api_key, model, base_url)?;
     *state.advisor.lock().unwrap() = Some(p);
     Ok(())
 }
@@ -1403,6 +1418,30 @@ fn load_all_scaffolds(handle: &AppHandle) -> Vec<Scaffold> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn atlas_provider_uses_openai_transport_defaults() {
+        let provider = provider_from_settings(
+            "atlas".to_string(),
+            Some("test-key".to_string()),
+            "deepseek-ai/deepseek-v4-pro".to_string(),
+            None,
+        )
+        .unwrap();
+
+        match provider {
+            Provider::OpenAI {
+                api_key,
+                model,
+                base_url,
+            } => {
+                assert_eq!(api_key, "test-key");
+                assert_eq!(model, "deepseek-ai/deepseek-v4-pro");
+                assert_eq!(base_url, "https://api.atlascloud.ai/v1");
+            }
+            _ => panic!("Atlas Cloud must use the OpenAI-compatible transport"),
+        }
+    }
 
     /// Verifies `pinkbin_walker` skips system trash / volume metadata directories
     /// at directory-read time. Without this prune a scope glob with a leading
