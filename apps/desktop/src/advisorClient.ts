@@ -197,6 +197,18 @@ export async function callAdvisor(
   return JSON.parse(stripCodeFence(raw)) as AdvisorResponse;
 }
 
+export async function testAdvisor(settings: AdvisorSettings): Promise<void> {
+  await callAdvisor(settings, {
+    path: 'Pinkbin connectivity test',
+    size_bytes: 0,
+    file_count: 0,
+    top_extensions: [],
+    sample_paths: [],
+    neighbors: [],
+    scaffold_hint: null,
+  });
+}
+
 export function isConfigured(s: AdvisorSettings | null): s is AdvisorSettings {
   if (!s) return false;
   if (s.provider === 'ollama') return Boolean(s.model);

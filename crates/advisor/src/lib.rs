@@ -219,6 +219,21 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
     Ok(parsed)
 }
 
+/// Sends the same smallest useful request as the real advisor flow, so the
+/// settings dialog can verify both the endpoint credentials and model.
+pub async fn test_connection(provider: &Provider) -> anyhow::Result<()> {
+    let req = AdvisorRequest {
+        path: "Pinkbin connectivity test".to_string(),
+        size_bytes: 0,
+        file_count: 0,
+        top_extensions: Vec::new(),
+        sample_paths: Vec::new(),
+        neighbors: Vec::new(),
+        scaffold_hint: None,
+    };
+    advise(provider, &req).await.map(|_| ())
+}
+
 fn strip_codefence(s: &str) -> &str {
     let s = s.trim();
     let s = s.strip_prefix("```json").unwrap_or(s);

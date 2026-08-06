@@ -4,7 +4,10 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use include_dir::{include_dir, Dir};
-use pinkbin_advisor::{advise as advise_provider, AdvisorRequest, AdvisorResponse, Provider};
+use pinkbin_advisor::{
+    advise as advise_provider, test_connection as test_advisor_connection, AdvisorRequest,
+    AdvisorResponse, Provider,
+};
 use pinkbin_executor::{execute, Plan, UndoEntry};
 use pinkbin_scaffold::{
     compile_all, detect_compiled, detect_for, expand_env, load_dir, parse_toml, CompiledScaffold,
@@ -1254,14 +1257,12 @@ fn open_steam_url(action: String, appid: u64) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-fn set_advisor(
-    state: State<'_, AppState>,
+fn provider_from_config(
     provider: String,
     api_key: Option<String>,
     model: String,
     base_url: Option<String>,
-) -> Result<(), String> {
+) -> Result<Provider, String> {
     let p = match provider.as_str() {
         "openai" => Provider::OpenAI {
             api_key: api_key.ok_or_else(|| "api_key required".to_string())?,
@@ -1285,8 +1286,31 @@ fn set_advisor(
         },
         other => return Err(format!("unknown provider: {other}")),
     };
+    Ok(p)
+}
+
+#[tauri::command]
+fn set_advisor(
+    state: State<'_, AppState>,
+    provider: String,
+    api_key: Option<String>,
+    model: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let p = provider_from_config(provider, api_key, model, base_url)?;
     *state.advisor.lock().unwrap() = Some(p);
     Ok(())
+}
+
+#[tauri::command]
+async fn test_advisor(
+    provider: String,
+    api_key: Option<String>,
+    model: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let p = provider_from_config(provider, api_key, model, base_url)?;
+    test_advisor_connection(&p).await.map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1336,6 +1360,7 @@ pub fn run() {
             reveal_in_explorer,
             execute_plan,
             set_advisor,
+            test_advisor,
             volume_info,
             list_steam_games,
             list_steam_workshop_items,

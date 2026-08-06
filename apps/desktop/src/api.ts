@@ -12,6 +12,7 @@ import type {
 } from './types';
 import { isTauri } from './env';
 import * as mocks from './mocks';
+import { testAdvisor as testAdvisorInBrowser } from './advisorClient';
 
 export const api = {
   scan: (path: string) =>
@@ -100,6 +101,26 @@ export const api = {
           baseUrl: baseUrl ?? null,
         })
       : Promise.resolve(),
+
+  testAdvisor: (
+    provider: 'openai' | 'anthropic' | 'gemini' | 'ollama',
+    model: string,
+    apiKey?: string,
+    baseUrl?: string,
+  ) =>
+    isTauri
+      ? invoke<void>('test_advisor', {
+          provider,
+          apiKey: apiKey ?? null,
+          model,
+          baseUrl: baseUrl ?? null,
+        })
+      : testAdvisorInBrowser({
+          provider,
+          model,
+          apiKey: apiKey ?? '',
+          baseUrl: baseUrl ?? '',
+        }),
 
   listSteamGames: () =>
     isTauri

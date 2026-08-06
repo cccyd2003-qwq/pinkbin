@@ -35,6 +35,7 @@ export function Settings({ onClose }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
   // undefined = 自动识别；手动指定时存具体 Provider。默认收起，不常驻展示。
   const [providerOverride, setProviderOverride] = useState<Provider | undefined>(undefined);
   const [showManual, setShowManual] = useState(false);
@@ -53,11 +54,17 @@ export function Settings({ onClose }: Props) {
   const provider = providerOverride ?? detectProvider(baseUrl);
   const needsKey = provider !== 'ollama';
 
+  const validate = (): string | null => {
+    if (!baseUrl.trim()) return '请填 Base URL';
+    if (!model.trim()) return '请填 Model 名';
+    if (needsKey && !apiKey.trim()) return '请填 API Key';
+    return null;
+  };
+
   const save = async () => {
     setErr(null); setMsg(null);
-    if (!baseUrl.trim()) { setErr('请填 Base URL'); return; }
-    if (!model.trim())   { setErr('请填 Model 名'); return; }
-    if (needsKey && !apiKey.trim()) { setErr('请填 API Key'); return; }
+    const validationError = validate();
+    if (validationError) { setErr(validationError); return; }
     try {
       saveSettings({ provider, model, apiKey, baseUrl, providerOverride });
       if (isTauri) {
@@ -67,6 +74,21 @@ export function Settings({ onClose }: Props) {
       setSaved(true);
     } catch (e) {
       setErr(String(e));
+    }
+  };
+
+  const test = async () => {
+    setErr(null); setMsg(null);
+    const validationError = validate();
+    if (validationError) { setErr(validationError); return; }
+    setTesting(true);
+    try {
+      await api.testAdvisor(provider, model, needsKey ? apiKey : undefined, baseUrl);
+      setMsg('连接成功 · 当前配置可用');
+    } catch (e) {
+      setErr(`连接失败：${String(e)}`);
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -174,8 +196,11 @@ export function Settings({ onClose }: Props) {
         {err && <div className="error">{err}</div>}
 
         <div className="modal-actions">
-          {saved && <button className="ghost" onClick={wipe}>清除</button>}
-          <button className="primary" onClick={save}>保存</button>
+          {saved && <button className="ghost" onClick={wipe} disabled={testing}>清除</button>}
+          <button className="secondary" onClick={test} disabled={testing} title="测试当前配置的连通性">
+            {testing ? '测试中…' : '测试'}
+          </button>
+          <button className="primary" onClick={save} disabled={testing}>保存</button>
           <button className="ghost" onClick={onClose}>关闭</button>
         </div>
 
