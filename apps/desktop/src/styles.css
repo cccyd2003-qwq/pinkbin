@@ -851,6 +851,25 @@ footer {
 }
 .provider-detect-toggle:hover { color: var(--pink-deep); }
 
+.model-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.model-row input { min-width: 0; flex: 1; }
+.model-fetch {
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.model-list-meta {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
 .hint {
   margin: 0;
   padding: 8px 12px;
@@ -2796,4 +2815,3 @@ footer {
   from { background-position: 0% 0%; }
   to   { background-position: -200% 0%; }
 }
-
