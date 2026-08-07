@@ -1566,6 +1566,7 @@ footer {
 }
 
 .chat-turn.pending .chat-bubble { opacity: 0.6; font-style: italic; }
+.chat-turn.pending.streaming .chat-bubble { opacity: 1; font-style: normal; }
 
 /* === Markdown inside assistant bubble ====================================== */
 .chat-turn.assistant .chat-bubble > *:first-child { margin-top: 0; }
@@ -2814,4 +2815,3 @@ footer {
   from { background-position: 0% 0%; }
   to   { background-position: -200% 0%; }
 }
-
