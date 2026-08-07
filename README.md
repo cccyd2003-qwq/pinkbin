@@ -78,10 +78,11 @@ Windows 上直读 NTFS Master File Table（其他平台用 jwalk 跨平台 walke
 
 ### 3. 已知应用走专属清理脚本
 
-某些应用大众化、占空间大、清理边界清楚——给它写一份**清理脚本**（一份 TOML + 一份 Rust 集成测试），用户在 Studio 卡片里直接按 scope 单独清。**目前两个**：
+某些应用大众化、占空间大、清理边界清楚——给它写一份**清理脚本**（一份 TOML + 一份 Rust 集成测试），用户在 Studio 卡片里直接按 scope 单独清。**目前三个**：
 
 - **微信 PC 端**（3.x + 4.x 双兼容）—— 22 个 scope，清缓存/接收媒体/聊天备份，永不动聊天 DB / 收藏 / 朋友圈 / `CustomEmotion`
 - **Conda 环境**—— 整目录回收 stale env（`conda-meta/history` mtime > 90 天），base env 灰显不可勾
+- **网易云音乐 PC 端**—— 清播放/Web 缓存、临时文件、日志和更新残留，永不动下载歌曲 / `Library` / `webdata` / Cookie
 
 **未来会做的**：Steam shadercache · Chrome 缓存 · Docker buildx · HuggingFace 模型 · npm/pnpm/pip cache · OBS 录像 · IDE 索引——大众应用、占空间大、清理边界清楚的，逐个走 14-phase 工作流加进来（含红线集成测试守护）。**为什么砍掉之前那 36 个 legacy scaffold**：因为没人验过 glob 边界，存在误删风险（典型例子：旧版 `node-modules` 把 Cursor / VSCode / 游戏内嵌的 node_modules 也命中了）。
 
@@ -94,8 +95,8 @@ Windows 上直读 NTFS Master File Table（其他平台用 jwalk 跨平台 walke
 1. **下载安装包**[（上面）](#下载)，双击安装，桌面出现 Pinkbin 图标
 2. **打开 → 右上角 ⚙ 配 AI**——填LLM的API Key
 3. **顶部"选择磁盘或文件夹"→ 点扫描**——2-5 秒后看到 treemap + 树
-4. **遇到陌生大文件夹**——拖到中间聊天框问 AI；或者右侧 Studio 已经认出了的（微信、conda）直接看清理面板
-5. **删除前**：目前只提供WeChat和Conda的清理脚本，可自动无风险清理。其他的，自行清理，毕竟宁可错放1000GB，不可错删一个文件。
+4. **遇到陌生大文件夹**——拖到中间聊天框问 AI；或者右侧 Studio 已经认出的（微信、conda、网易云音乐）直接看清理面板
+5. **删除前**：目前只提供 WeChat、Conda 和网易云音乐的清理脚本，可按 scope 预览后送进回收站。其他的，自行清理，毕竟宁可错放1000GB，不可错删一个文件。
 
 ---
 
@@ -132,7 +133,7 @@ Windows 上直读 NTFS Master File Table（其他平台用 jwalk 跨平台 walke
 
 - [x] 整盘秒扫，看到每个文件夹占多少
 - [x] 拖任意文件夹给 AI 问"这是什么、能不能删"
-- [x] 微信、Conda 已经支持一键清理
+- [x] 微信、Conda、网易云音乐已经支持按 scope 清理
 - [ ] 加一个"撤销"按钮，删错了能一键找回
 - [ ] 把更多常见软件加进来：Steam、Chrome、Docker、npm/pip、HuggingFace、OBS、各种 IDE 缓存……
 - [ ] 出 macOS / Linux 的预编译版（要先解决签名 + 真机验证）
