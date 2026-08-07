@@ -12,11 +12,13 @@ import { SteamInspectorModal } from './SteamInspectorModal';
 const FEATURED_IDS = [
   'wechat-pc',
   'conda',
+  'netease-cloud-music',
 ];
 
 const ICONS: Record<string, string> = {
   'wechat-pc': '💬',
   'conda':     '🐍',
+  'netease-cloud-music': '🎵',
 };
 
 /// Collect every top-level node tagged with `scaffoldId`. We deliberately

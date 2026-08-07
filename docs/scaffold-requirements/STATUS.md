@@ -23,6 +23,14 @@
 |---|:---:|:---:|:---:|:---:|---|
 | conda | ⏳ | ✅ | ✅ | ⏳ | env 卡片专用 UI；整目录 recycle |
 
+## Media
+
+类别需求文档：[`media.md`](media.md)
+
+| Scaffold | Req doc | TOML | Safety test | UI 验证 | 备注 |
+|---|:---:|:---:|:---:|:---:|---|
+| netease-cloud-music | ✅ | ✅ | ✅ | ⏳ | Windows PC；7 个 scope，保留 Library / webdata / Cookie / 下载歌曲 |
+
 ---
 
 **图例**：✅ 完成 / ⏳ 进行中 / ❌ 未开始

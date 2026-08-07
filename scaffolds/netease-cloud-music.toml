@@ -1,0 +1,89 @@
+id          = "netease-cloud-music"
+name        = "网易云音乐（PC）"
+homepage    = "https://music.163.com/"
+risk        = "low"
+disclaimer  = """\
+只清网易云音乐 PC 客户端的可重建播放缓存、网页内核缓存、临时文件、运行日志和更新下载残留。\
+下载到用户指定目录的歌曲（包括 mp3、flac、ncm）、Library / webdata 中的播放列表与歌单、登录凭据 / Cookie、设置、崩溃转储和 AI 资源不在任何 scope 内。\
+清理前请退出网易云音乐；清掉播放缓存后，封面或已缓存歌曲可能需要重新加载。所有操作默认进入系统回收站，可还原。\
+"""
+
+# Windows desktop data roots. The wildcard variant also covers a custom drive
+# or a portable install that keeps the same NetEase/CloudMusic layout.
+detect = [
+  "%LOCALAPPDATA%/NetEase/CloudMusic",
+  "%APPDATA%/NetEase/CloudMusic",
+  "**/NetEase/CloudMusic",
+]
+
+# Deliberately leave the basename fallback empty: a user folder named
+# CloudMusic is not enough evidence to tag it as the NetEase client.
+[match]
+name_contains   = []
+must_have_child = []
+
+# The old Win32 client stores streamed-song cache under Cache/Cache. It is
+# re-downloadable, but a retention prompt avoids removing a just-used cache by
+# default when the user wants to keep recent playback warm.
+[[scope]]
+id       = "playback-cache"
+label    = "播放缓存（Cache/Cache）"
+glob     = "**/NetEase/CloudMusic/Cache/Cache/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "days", default = 30, label = "保留最近多少天" }
+
+# Static covers and other client assets are downloaded again when needed.
+[[scope]]
+id       = "static-assets"
+label    = "静态资源缓存（Statics）"
+glob     = "**/NetEase/CloudMusic/Statics/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
+
+# The current desktop client uses a versioned webapp directory; older builds
+# used webapp without the architecture suffix. Only Chromium cache buckets are
+# included. Local Storage, IndexedDB, databases and blob storage may contain
+# login/session or application state and are intentionally excluded.
+[[scope]]
+id       = "web-cache"
+label    = "网页内核缓存"
+glob     = "**/NetEase/CloudMusic/webapp*/{Cache,Code Cache,GPUCache}/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
+
+[[scope]]
+id       = "temp-files"
+label    = "临时文件"
+glob     = "**/NetEase/CloudMusic/Temp/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
+
+[[scope]]
+id       = "app-logs"
+label    = "运行日志"
+glob     = "**/NetEase/CloudMusic/Log/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
+
+[[scope]]
+id       = "main-log"
+label    = "主程序日志（cloudmusic.elog）"
+glob     = "**/NetEase/CloudMusic/cloudmusic.elog"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
+
+# Downloaded patch/install leftovers can be fetched again. This does not
+# target the installed program under Program Files.
+[[scope]]
+id       = "update-cache"
+label    = "更新下载残留"
+glob     = "**/NetEase/CloudMusic/update/**"
+mode     = "recycle"
+category = "cache"
+prompt   = { kind = "none" }
