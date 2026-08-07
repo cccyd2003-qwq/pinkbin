@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, ChevronDown, Sparkles, MessageSquare, Trash2, FolderOpen, Copy, ExternalLink, Gamepad2 } from 'lucide-react';
 import { useStore } from '../store';
 import { formatBytes } from '../format';
@@ -65,9 +65,21 @@ export function Studio() {
   const root = useStore((s) => s.root);
   const scaffolds = useStore((s) => s.scaffolds);
   const requestStudio = useStore((s) => s.requestStudio);
+  const studioFocusRequest = useStore((s) => s.studioFocusRequest);
+  const consumeStudioFocus = useStore((s) => s.consumeStudioFocus);
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openTool, setOpenTool] = useState<null | 'steam-inspector'>(null);
+
+  useEffect(() => {
+    if (!studioFocusRequest) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.add(studioFocusRequest.scaffoldId);
+      return next;
+    });
+    consumeStudioFocus();
+  }, [studioFocusRequest, consumeStudioFocus]);
 
   const hidden = (() => {
     try { return localStorage.getItem('pinkbin.hideStudio') === '1'; } catch { return false; }

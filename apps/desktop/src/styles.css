@@ -1748,6 +1748,170 @@ footer {
   flex-wrap: wrap;
   align-items: center;
 }
+.chat-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 4px 7px;
+  border: 1px solid rgba(95, 200, 138, 0.45);
+  border-radius: 999px;
+  color: #31815a;
+  background: rgba(95, 200, 138, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+}
+.chat-quick-actions {
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--pink);
+  background: var(--pink-bg);
+  border-radius: 0 10px 10px 0;
+}
+.chat-quick-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 7px;
+  color: var(--pink-deep);
+  font-size: 11px;
+  font-weight: 700;
+}
+.chat-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.chat-quick-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid rgba(21, 8, 24, 0.12);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.chat-quick-action:hover:not(:disabled) {
+  border-color: var(--pink-deep);
+  background: #fff;
+  transform: translateY(-1px);
+}
+.chat-quick-action:disabled { opacity: 0.55; cursor: not-allowed; }
+.cleanup-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 2px;
+}
+.cleanup-candidates-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.cleanup-candidates-head > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--pink-deep);
+}
+.cleanup-candidate {
+  padding: 10px 11px;
+  border: 1px solid rgba(21, 8, 24, 0.1);
+  border-left: 3px solid var(--ink-3);
+  border-radius: 0 10px 10px 0;
+  background: var(--card);
+}
+.cleanup-candidate-preview { border-left-color: #5fc88a; }
+.cleanup-candidate-inspect { border-left-color: #ffb37a; }
+.cleanup-candidate-keep { border-left-color: #ff5d7a; background: #fff9fa; }
+.cleanup-candidate-top,
+.cleanup-candidate-meta,
+.cleanup-candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.cleanup-candidate-top { justify-content: space-between; }
+.cleanup-candidate-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.cleanup-candidate-name svg { color: var(--pink-deep); flex-shrink: 0; }
+.cleanup-candidate-size {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.cleanup-candidate-path {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cleanup-candidate-meta {
+  margin-top: 5px;
+  color: var(--ink-3);
+  font-size: 10px;
+}
+.cleanup-candidate-meta span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-2);
+  font-weight: 650;
+}
+.cleanup-candidate-reason {
+  margin-top: 5px;
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.cleanup-candidate-actions {
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+.cleanup-candidate-actions button { font-size: 10.5px; padding: 5px 8px; }
+.cleanup-candidate-lock { margin-left: auto; color: var(--err); }
+.cleanup-candidates-empty {
+  padding: 10px 12px;
+  border-left: 3px solid var(--ink-3);
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.chat-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 11px;
+}
 .advice-pill {
   display: inline-flex;
   align-items: center;

@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { Node, Scaffold, AdvisorResponse } from './types';
+import type {
+  Node,
+  Scaffold,
+  AdvisorResponse,
+  CleanupCandidate,
+  QuickAction,
+  ScanContext,
+} from './types';
 
 export interface WalkItem {
   node: Node;
@@ -16,6 +23,10 @@ export interface ChatTurn {
   advice?: AdvisorResponse;
   // optional scaffold suggestion the user can act on inline
   scaffoldId?: string | null;
+  quickActions?: QuickAction[];
+  cleanupCandidates?: CleanupCandidate[];
+  candidateSource?: 'ai' | 'local';
+  retryActionId?: string;
   pending?: boolean;
 }
 
@@ -23,12 +34,15 @@ export interface ChatSession {
   // the node currently being discussed in the chat panel
   node: Node | null;
   scaffoldId: string | null;
+  scanId: number | null;
+  scanContext: ScanContext | null;
   turns: ChatTurn[];
   busy: boolean;
 }
 
 interface AppState {
   root: Node | null;
+  scanId: number;
   scaffolds: Scaffold[];
   selectedPath: string | null;
   walkQueue: WalkItem[];
@@ -37,6 +51,7 @@ interface AppState {
   reclaimedBytes: number;
   chat: ChatSession;
   studioRequest: { scaffoldId: string; ts: number } | null;
+  studioFocusRequest: { scaffoldId: string; ts: number } | null;
 
   setRoot: (n: Node | null) => void;
   setScaffolds: (s: Scaffold[]) => void;
@@ -51,23 +66,36 @@ interface AppState {
   pushChatTurn: (t: ChatTurn) => void;
   patchChatTurn: (id: string, patch: Partial<ChatTurn>) => void;
   setChatBusy: (b: boolean) => void;
+  setScanContext: (context: ScanContext | null) => void;
+  updateScanContext: (context: ScanContext) => void;
   resetChat: () => void;
   requestStudio: (scaffoldId: string) => void;
   consumeStudio: () => void;
+  requestStudioFocus: (scaffoldId: string) => void;
+  consumeStudioFocus: () => void;
 }
 
 export const useStore = create<AppState>((set) => ({
   root: null,
+  scanId: 0,
   scaffolds: [],
   selectedPath: null,
   walkQueue: [],
   walkIndex: 0,
   walkThresholdGB: 1,
   reclaimedBytes: 0,
-  chat: { node: null, scaffoldId: null, turns: [], busy: false },
+  chat: { node: null, scaffoldId: null, scanId: null, scanContext: null, turns: [], busy: false },
   studioRequest: null,
+  studioFocusRequest: null,
 
-  setRoot: (root) => set({ root }),
+  setRoot: (root) => set((s) => ({
+    root,
+    scanId: s.scanId + 1,
+    // A completed scan is a new evidence set, even when the selected path is
+    // unchanged. Clear the previous conversation immediately so stale turns
+    // cannot render while ChatPanel builds the new ScanContext.
+    chat: { node: null, scaffoldId: null, scanId: null, scanContext: null, turns: [], busy: false },
+  })),
   setScaffolds: (scaffolds) => set({ scaffolds }),
   selectPath: (selectedPath) => set({ selectedPath }),
   setWalk: (walkQueue) => set({ walkQueue, walkIndex: 0 }),
@@ -95,9 +123,22 @@ export const useStore = create<AppState>((set) => ({
       },
     })),
   setChatBusy: (b) => set((s) => ({ chat: { ...s.chat, busy: b } })),
-  resetChat: () => set(() => ({ chat: { node: null, scaffoldId: null, turns: [], busy: false } })),
+  setScanContext: (scanContext) =>
+    set(() => ({
+      chat: scanContext
+        ? { node: null, scaffoldId: null, scanId: scanContext.scan_id, scanContext, turns: [], busy: false }
+        : { node: null, scaffoldId: null, scanId: null, scanContext: null, turns: [], busy: false },
+    })),
+  updateScanContext: (scanContext) => set((s) => ({
+    chat: { ...s.chat, scanId: scanContext.scan_id, scanContext },
+  })),
+  resetChat: () => set((s) => ({
+    chat: { ...s.chat, node: null, scaffoldId: null, turns: [], busy: false },
+  })),
   requestStudio: (scaffoldId) => set({ studioRequest: { scaffoldId, ts: Date.now() } }),
   consumeStudio: () => set({ studioRequest: null }),
+  requestStudioFocus: (scaffoldId) => set({ studioFocusRequest: { scaffoldId, ts: Date.now() } }),
+  consumeStudioFocus: () => set({ studioFocusRequest: null }),
 }));
 
 export function buildWalkQueue(root: Node, thresholdBytes: number): { node: Node; scaffoldId: string | null }[] {

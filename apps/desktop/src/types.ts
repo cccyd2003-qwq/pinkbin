@@ -46,6 +46,87 @@ export interface Scaffold {
   scopes: Scope[];
 }
 
+/** A compact, evidence-backed directory entry sent to the advisor. */
+export interface ScanEntry {
+  path: string;
+  name: string;
+  size_bytes: number;
+  file_count: number;
+  depth: number;
+  kind: 'dir' | 'file';
+  scaffold_id?: string | null;
+  top_extensions?: ExtShare[];
+}
+
+export interface ScanScaffoldMatch {
+  id: string;
+  name: string;
+  risk: Risk;
+  total_size_bytes: number;
+  total_files: number;
+  cleanup_supported: boolean;
+  matches: ScanEntry[];
+}
+
+/**
+ * Compact scan facts shared by the overview and every follow-up question.
+ * Root totals are exact; child entries are the ranked visible slice of the
+ * in-memory tree, which is intentionally breadth-capped by the scanner.
+ */
+export interface ScanContext {
+  scan_id: number;
+  root_path: string;
+  total_size_bytes: number;
+  total_files: number;
+  largest_directory: ScanEntry | null;
+  top_entries: ScanEntry[];
+  known_scaffolds: ScanScaffoldMatch[];
+  coverage: {
+    root_totals_exact: true;
+    child_entries: 'visible_ranked_sample';
+    max_depth: number;
+    note: string;
+  };
+}
+
+export interface QuickAction {
+  id: string;
+  label: string;
+  prompt: string;
+  description: string;
+}
+
+export type CleanupCandidateStatus = 'preview' | 'inspect' | 'keep';
+export type CleanupCandidateMethod = 'scaffold' | 'manual' | 'keep';
+export type CleanupCandidateHandling = 'studio_scope_preview' | 'inspect_in_explorer' | 'keep';
+
+export interface CleanupCandidate {
+  path: string;
+  name: string;
+  kind: 'dir' | 'file';
+  size_bytes: number;
+  file_count: number;
+  risk: Risk;
+  status: CleanupCandidateStatus;
+  method: CleanupCandidateMethod;
+  suggested_handling: CleanupCandidateHandling;
+  evidence: string[];
+  audited_scaffold: boolean;
+  reason: string;
+  scaffold_id?: string | null;
+  source: 'scanned' | 'scaffold';
+}
+
+export interface CleanupCandidateResponse {
+  summary: string;
+  candidates: CleanupCandidate[];
+}
+
+export interface ChatHistoryItem {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
 export interface AdvisorRequest {
   path: string;
   size_bytes: number;
