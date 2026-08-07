@@ -3,7 +3,14 @@
 //
 // Settings persist to localStorage under "pinkbin.advisor".
 
-import type { AdvisorRequest, AdvisorResponse } from './types';
+import type {
+  AdvisorRequest,
+  AdvisorResponse,
+  ChatHistoryItem,
+  CleanupCandidateResponse,
+  ScanContext,
+} from './types';
+import { normalizeCleanupResponse } from './scanContext';
 
 export type Provider = 'openai_responses' | 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
@@ -246,6 +253,28 @@ const OVERVIEW_SYSTEM = `You are Pinkbin's AI advisor. The user just finished sc
 
 口语化中文，不要 markdown bullet（用纯文本换行就行），不要客套话。`;
 
+const CLEANUP_LIST_SYSTEM = `You are Pinkbin's conservative cleanup triage assistant. Return strict JSON only:
+{
+  "summary": "short Chinese summary",
+  "candidates": [
+    {
+      "path": "one exact path copied from scan_context.top_entries or scan_context.known_scaffolds.matches",
+      "risk": "low|medium|high",
+      "status": "preview|inspect|keep",
+      "reason": "short Chinese reason"
+    }
+  ]
+}
+
+Rules:
+- Only use exact paths present in the supplied scan context. Never invent a path or software.
+- A detected scaffold may be status=preview only when cleanup_supported=true; it is only a Studio preview, never direct deletion.
+- A detected scaffold with cleanup_supported=false is evidence of discovery only and must stay status=inspect or keep.
+- System directories and user content are status=keep.
+- Unknown cache/build-looking directories are status=inspect unless an audited scaffold proves the cleanup scope.
+- If evidence is not enough, return an empty candidates list and explain why in summary.
+- Do not output PowerShell, rm, shell commands, or instructions to directly delete a directory.`;
+
 export interface ChatImage {
   /** Full data URL (e.g. `data:image/png;base64,...`). */
   dataUrl: string;
@@ -260,16 +289,61 @@ function dataUrlBase64(dataUrl: string): string {
 }
 
 export async function overviewChat(summary: object): Promise<string> {
-  return runChatRaw(OVERVIEW_SYSTEM, JSON.stringify(summary, null, 2));
+  const evidenceRules = `
+Evidence rules for this response:
+- The root path, root size, and root file count in scan_context are authoritative.
+- top_entries is a ranked visible sample. Never describe the first child as the whole scan.
+- largest_directory is the largest visible child directory and includes its complete path; do not call it the whole scan root.
+- Only mention an application or cleanup capability when it appears in top_entries or known_scaffolds.
+- known_scaffolds.cleanup_supported=false means the app was detected but has no safe cleanup script in this version.
+- Never ask the user to provide the directory list; the scan context is already available.`;
+  return runChatRaw(`${OVERVIEW_SYSTEM}${evidenceRules}`, JSON.stringify(summary, null, 2));
 }
 
 export async function freeChat(
-  context: string,
-  userMessage: string,
-  images?: ChatImage[],
+  request: FreeChatRequest,
 ): Promise<string> {
-  const userText = context ? `${context}\n\n用户的问题：${userMessage}` : userMessage;
-  return runChatRaw(CHAT_SYSTEM, userText, images);
+  const blocks = [
+    request.scanContext ? `本次扫描上下文（必须优先使用）：\n${JSON.stringify(request.scanContext, null, 2)}` : '',
+    request.history && request.history.length > 0
+      ? `最近对话（仅用于理解上下文，不要把其中的猜测当成扫描事实）：\n${JSON.stringify(request.history, null, 2)}`
+      : '',
+    request.context ?? '',
+    `用户的问题：${request.userMessage}`,
+  ].filter(Boolean);
+  const chatRules = `
+Additional rules:
+- When scan_context exists, answer from it and do not ask for a directory list.
+- Never invent paths, applications, or cleanup support.
+- AI is advisory only; never output PowerShell, rm, shell commands, or direct deletion instructions.`;
+  return runChatRaw(`${CHAT_SYSTEM}${chatRules}`, blocks.join('\n\n'), request.images);
+}
+
+export interface FreeChatRequest {
+  context?: string;
+  userMessage: string;
+  scanContext?: ScanContext | null;
+  history?: ChatHistoryItem[];
+  images?: ChatImage[];
+}
+
+export interface CleanupChatRequest {
+  context: ScanContext;
+  intent: string;
+  history?: ChatHistoryItem[];
+}
+
+export async function cleanupChat(request: CleanupChatRequest): Promise<CleanupCandidateResponse> {
+  const raw = await runChatRaw(
+    CLEANUP_LIST_SYSTEM,
+    JSON.stringify({
+      scan_context: request.context,
+      recent_history: request.history ?? [],
+      task: request.intent,
+    }, null, 2),
+  );
+  const parsed = JSON.parse(stripCodeFence(raw)) as unknown;
+  return normalizeCleanupResponse(parsed, request.context);
 }
 
 async function runChatRaw(system: string, user: string, images?: ChatImage[]): Promise<string> {
