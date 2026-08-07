@@ -153,7 +153,7 @@ pnpm -C apps/desktop dev  # frontend only, browser-based debugging, mock backend
 cargo test --workspace    # workspace tests
 ```
 
-Requires **Node 20+ · pnpm 9+ · Rust stable · Tauri prerequisites** (on Windows: VS Build Tools 2022 + WebView2).
+Requires **Node 20.19+ (or Node 22.12+) · pnpm 9+ · Rust stable · Tauri prerequisites** (on Windows: VS Build Tools 2022 + WebView2).
 
 ---
 

@@ -194,7 +194,7 @@ Compress-Archive -Path "$portable\Pinkbin.exe" -DestinationPath "release\Pinkbin
 
 当前 scaffolds 已编译进 EXE，绿色包只需要携带 `Pinkbin.exe`。
 
-需要 **Node 20+ · pnpm 9+ · Rust stable · Tauri 前置依赖**（Windows 上是 VS Build Tools 2022 + WebView2）。
+需要 **Node 20.19+（或 Node 22.12+）· pnpm 9+ · Rust stable · Tauri 前置依赖**（Windows 上是 VS Build Tools 2022 + WebView2）。
 
 ---
 

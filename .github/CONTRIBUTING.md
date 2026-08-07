@@ -5,7 +5,7 @@ Thanks for considering a contribution. The lowest-friction path is **a new scaff
 ## Dev environment
 
 - Rust 1.80+ (`rustup default stable`)
-- Node 20+, pnpm 9+
+- Node 20.19+ (or Node 22.12+), pnpm 9+
 - Tauri prerequisites: <https://tauri.app/start/prerequisites/>
 - On Windows, install the WebView2 runtime if missing.
 
