@@ -12,7 +12,12 @@ import type {
 } from './types';
 import { isTauri } from './env';
 import * as mocks from './mocks';
-import { detectAdvisorProvider } from './advisorClient';
+import {
+  detectAdvisorProvider,
+  listAdvisorModels as listAdvisorModelsInBrowser,
+  type AdvisorModel,
+  type Provider,
+} from './advisorClient';
 
 export const api = {
   scan: (path: string) =>
@@ -99,6 +104,29 @@ export const api = {
           baseUrl: baseUrl ?? null,
         })
       : detectAdvisorProvider(model, apiKey ?? '', baseUrl ?? ''),
+
+  listAdvisorModels: (baseUrl: string, apiKey?: string) =>
+    isTauri
+      ? invoke<AdvisorModel[]>('list_advisor_models', {
+          apiKey: apiKey ?? null,
+          baseUrl,
+        })
+      : listAdvisorModelsInBrowser(apiKey ?? '', baseUrl),
+
+  configureAdvisor: (
+    provider: Provider,
+    model: string,
+    apiKey?: string,
+    baseUrl?: string,
+  ) =>
+    isTauri
+      ? invoke<void>('configure_advisor', {
+          provider,
+          apiKey: apiKey ?? null,
+          model,
+          baseUrl: baseUrl ?? null,
+        })
+      : Promise.resolve(),
 
   listSteamGames: () =>
     isTauri

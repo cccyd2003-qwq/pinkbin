@@ -2,6 +2,8 @@
 //!
 //! Sends only directory metadata and sample paths — never file contents.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +63,186 @@ pub enum Provider {
         model: String,
         base_url: String,
     },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelOption {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+fn model_option(
+    id: Option<&serde_json::Value>,
+    label: Option<&serde_json::Value>,
+) -> Option<ModelOption> {
+    let id = id?.as_str()?.trim();
+    if id.is_empty() {
+        return None;
+    }
+
+    let label = label
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != id)
+        .map(str::to_string);
+
+    Some(ModelOption {
+        id: id.to_string(),
+        label,
+    })
+}
+
+fn dedupe_models(models: Vec<ModelOption>) -> Vec<ModelOption> {
+    let mut seen = HashSet::new();
+    models
+        .into_iter()
+        .filter(|model| seen.insert(model.id.clone()))
+        .collect()
+}
+
+fn parse_openai_models(value: &serde_json::Value) -> anyhow::Result<Vec<ModelOption>> {
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("missing data array"))?;
+
+    Ok(dedupe_models(
+        data.iter()
+            .filter_map(|entry| model_option(entry.get("id"), entry.get("display_name")))
+            .collect(),
+    ))
+}
+
+fn parse_anthropic_models(value: &serde_json::Value) -> anyhow::Result<Vec<ModelOption>> {
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("missing data array"))?;
+
+    Ok(dedupe_models(
+        data.iter()
+            .filter_map(|entry| model_option(entry.get("id"), entry.get("display_name")))
+            .collect(),
+    ))
+}
+
+fn parse_gemini_models(value: &serde_json::Value) -> anyhow::Result<Vec<ModelOption>> {
+    let data = value
+        .get("models")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("missing models array"))?;
+
+    Ok(dedupe_models(
+        data.iter()
+            .filter_map(|entry| {
+                let supports_generate_content = entry
+                    .get("supportedGenerationMethods")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|methods| {
+                        methods
+                            .iter()
+                            .any(|method| method.as_str() == Some("generateContent"))
+                    });
+                if !supports_generate_content {
+                    return None;
+                }
+
+                let mut option = model_option(entry.get("name"), entry.get("displayName"))?;
+                if let Some(id) = option.id.strip_prefix("models/") {
+                    option.id = id.to_string();
+                }
+                Some(option)
+            })
+            .collect(),
+    ))
+}
+
+fn parse_ollama_models(value: &serde_json::Value) -> anyhow::Result<Vec<ModelOption>> {
+    let data = value
+        .get("models")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("missing models array"))?;
+
+    Ok(dedupe_models(
+        data.iter()
+            .filter_map(|entry| {
+                model_option(entry.get("name").or_else(|| entry.get("model")), None)
+            })
+            .collect(),
+    ))
+}
+
+async fn fetch_json(request: reqwest::RequestBuilder) -> anyhow::Result<serde_json::Value> {
+    Ok(request.send().await?.error_for_status()?.json().await?)
+}
+
+/// Fetches model IDs from the configured endpoint without exposing provider
+/// response bodies (which may contain credentials or upstream diagnostics).
+pub async fn list_models(
+    api_key: Option<&str>,
+    base_url: &str,
+) -> anyhow::Result<Vec<ModelOption>> {
+    let base_url = base_url.trim().trim_end_matches('/');
+    if base_url.is_empty() {
+        anyhow::bail!("base URL is empty");
+    }
+
+    let api_key = api_key.map(str::trim).filter(|key| !key.is_empty());
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()?;
+    let mut failures = Vec::new();
+
+    if let Some(api_key) = api_key {
+        let result = fetch_json(
+            client
+                .get(format!("{base_url}/models"))
+                .bearer_auth(api_key),
+        )
+        .await
+        .and_then(|value| parse_openai_models(&value));
+        match result {
+            Ok(models) => return Ok(models),
+            Err(_) => failures.push("OpenAI /models"),
+        }
+
+        let result = fetch_json(
+            client
+                .get(format!("{base_url}/v1/models"))
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01"),
+        )
+        .await
+        .and_then(|value| parse_anthropic_models(&value));
+        match result {
+            Ok(models) => return Ok(models),
+            Err(_) => failures.push("Anthropic /v1/models"),
+        }
+
+        let result = fetch_json(
+            client
+                .get(format!("{base_url}/v1beta/models"))
+                .query(&[("key", api_key)]),
+        )
+        .await
+        .and_then(|value| parse_gemini_models(&value));
+        match result {
+            Ok(models) => return Ok(models),
+            Err(_) => failures.push("Gemini /v1beta/models"),
+        }
+    }
+
+    let result = fetch_json(client.get(format!("{base_url}/api/tags")))
+        .await
+        .and_then(|value| parse_ollama_models(&value));
+    match result {
+        Ok(models) => Ok(models),
+        Err(_) => {
+            failures.push("Ollama /api/tags");
+            anyhow::bail!("未获取到可用模型列表（已尝试：{}）", failures.join("、"));
+        }
+    }
 }
 
 const SYSTEM: &str = r#"You are Pinkbin's local file advisor. Given a folder's metadata, decide what it is and whether it can be cleaned. Reply in strict JSON ONLY, matching this schema exactly:
@@ -268,4 +450,76 @@ fn strip_codefence(s: &str) -> &str {
     let s = s.strip_prefix("```json").unwrap_or(s);
     let s = s.strip_prefix("```").unwrap_or(s);
     s.strip_suffix("```").unwrap_or(s).trim()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_and_deduplicates_openai_models() {
+        let value = serde_json::json!({
+            "data": [
+                { "id": "gpt-4o", "display_name": "GPT-4o" },
+                { "id": "gpt-4o", "display_name": "GPT-4o duplicate" },
+                { "id": "  ", "display_name": "empty" }
+            ]
+        });
+
+        let models = parse_openai_models(&value).expect("valid OpenAI response");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "gpt-4o");
+        assert_eq!(models[0].label.as_deref(), Some("GPT-4o"));
+    }
+
+    #[test]
+    fn parses_anthropic_display_names() {
+        let value = serde_json::json!({
+            "data": [{ "id": "claude-sonnet", "display_name": "Claude Sonnet" }]
+        });
+
+        let models = parse_anthropic_models(&value).expect("valid Anthropic response");
+        assert_eq!(models[0].id, "claude-sonnet");
+        assert_eq!(models[0].label.as_deref(), Some("Claude Sonnet"));
+    }
+
+    #[test]
+    fn filters_gemini_models_without_generate_content() {
+        let value = serde_json::json!({
+            "models": [
+                {
+                    "name": "models/gemini-2.5-flash",
+                    "displayName": "Gemini 2.5 Flash",
+                    "supportedGenerationMethods": ["generateContent"]
+                },
+                {
+                    "name": "models/text-embedding-005",
+                    "supportedGenerationMethods": ["embedContent"]
+                }
+            ]
+        });
+
+        let models = parse_gemini_models(&value).expect("valid Gemini response");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "gemini-2.5-flash");
+    }
+
+    #[test]
+    fn parses_ollama_model_names() {
+        let value = serde_json::json!({
+            "models": [
+                { "name": "llama3.2:latest" },
+                { "model": "qwen2.5:7b" }
+            ]
+        });
+
+        let models = parse_ollama_models(&value).expect("valid Ollama response");
+        assert_eq!(
+            models
+                .iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>(),
+            ["llama3.2:latest", "qwen2.5:7b"]
+        );
+    }
 }

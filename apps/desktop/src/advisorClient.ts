@@ -21,6 +21,11 @@ export interface AdvisorSettings {
   baseUrl: string;
 }
 
+export interface AdvisorModel {
+  id: string;
+  label?: string;
+}
+
 const STORAGE_KEY = 'pinkbin.advisor';
 
 export function loadSettings(): AdvisorSettings | null {
@@ -231,6 +236,148 @@ export async function detectAdvisorProvider(
   }
 
   throw new Error(`未探测到可用 AI 协议（已尝试：${failures.join('、')}）`);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function modelOption(idValue: unknown, labelValue: unknown): AdvisorModel | null {
+  if (typeof idValue !== 'string') return null;
+  const id = idValue.trim();
+  if (!id) return null;
+  const label = typeof labelValue === 'string' ? labelValue.trim() : '';
+  return label && label !== id ? { id, label } : { id };
+}
+
+function dedupeModels(models: AdvisorModel[]): AdvisorModel[] {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    if (seen.has(model.id)) return false;
+    seen.add(model.id);
+    return true;
+  });
+}
+
+function parseOpenAIModels(value: unknown): AdvisorModel[] {
+  const data = asRecord(value)?.data;
+  if (!Array.isArray(data)) throw new Error('invalid OpenAI model response');
+  return dedupeModels(data
+    .map((entry) => {
+      const record = asRecord(entry);
+      return modelOption(record?.id, record?.display_name);
+    })
+    .filter((model): model is AdvisorModel => Boolean(model)));
+}
+
+function parseAnthropicModels(value: unknown): AdvisorModel[] {
+  const data = asRecord(value)?.data;
+  if (!Array.isArray(data)) throw new Error('invalid Anthropic model response');
+  return dedupeModels(data
+    .map((entry) => {
+      const record = asRecord(entry);
+      return modelOption(record?.id, record?.display_name);
+    })
+    .filter((model): model is AdvisorModel => Boolean(model)));
+}
+
+function parseGeminiModels(value: unknown): AdvisorModel[] {
+  const data = asRecord(value)?.models;
+  if (!Array.isArray(data)) throw new Error('invalid Gemini model response');
+  return dedupeModels(data
+    .map((entry) => {
+      const record = asRecord(entry);
+      const methods = record?.supportedGenerationMethods;
+      if (!Array.isArray(methods) || !methods.includes('generateContent')) return null;
+      const option = modelOption(record?.name, record?.displayName);
+      if (!option) return null;
+      return option.id.startsWith('models/') ? { ...option, id: option.id.slice(7) } : option;
+    })
+    .filter((model): model is AdvisorModel => Boolean(model)));
+}
+
+function parseOllamaModels(value: unknown): AdvisorModel[] {
+  const data = asRecord(value)?.models;
+  if (!Array.isArray(data)) throw new Error('invalid Ollama model response');
+  return dedupeModels(data
+    .map((entry) => {
+      const record = asRecord(entry);
+      return modelOption(record?.name ?? record?.model, undefined);
+    })
+    .filter((model): model is AdvisorModel => Boolean(model)));
+}
+
+async function tryModelList(
+  name: string,
+  url: string,
+  init: RequestInit,
+  parse: (value: unknown) => AdvisorModel[],
+  failures: string[],
+): Promise<AdvisorModel[] | null> {
+  try {
+    const response = await fetch(url, init);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return parse(await response.json() as unknown);
+  } catch {
+    failures.push(name);
+    return null;
+  }
+}
+
+/** Browser-preview counterpart to the desktop model-list command. */
+export async function listAdvisorModels(apiKey: string, baseUrl: string): Promise<AdvisorModel[]> {
+  const base = baseUrl.trim().replace(/\/$/, '');
+  if (!base) throw new Error('Base URL 不能为空');
+
+  const key = apiKey.trim();
+  const failures: string[] = [];
+  if (key) {
+    const openai = await tryModelList(
+      'OpenAI /models',
+      `${base}/models`,
+      { headers: { Authorization: `Bearer ${key}` } },
+      parseOpenAIModels,
+      failures,
+    );
+    if (openai) return openai;
+
+    const anthropic = await tryModelList(
+      'Anthropic /v1/models',
+      `${base}/v1/models`,
+      {
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+      },
+      parseAnthropicModels,
+      failures,
+    );
+    if (anthropic) return anthropic;
+
+    const gemini = await tryModelList(
+      'Gemini /v1beta/models',
+      `${base}/v1beta/models?key=${encodeURIComponent(key)}`,
+      {},
+      parseGeminiModels,
+      failures,
+    );
+    if (gemini) return gemini;
+  }
+
+  const ollama = await tryModelList(
+    'Ollama /api/tags',
+    `${base}/api/tags`,
+    {},
+    parseOllamaModels,
+    failures,
+  );
+  if (ollama) return ollama;
+
+  throw new Error(`未获取到可用模型列表（已尝试：${failures.join('、')}）`);
 }
 
 export function isConfigured(s: AdvisorSettings | null): s is AdvisorSettings {
