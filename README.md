@@ -165,6 +165,35 @@ pnpm -C apps/desktop dev  # 仅前端，浏览器调试，mock 后端
 cargo test --workspace    # 全工作空间测试
 ```
 
+### Windows 绿色版
+
+在 VS Developer PowerShell 中执行：
+
+```powershell
+cd D:\PubProject\pinkbin
+
+pnpm tauri build `
+  --target x86_64-pc-windows-msvc `
+  --no-bundle
+```
+
+原始绿色版程序输出到：
+
+```text
+target\x86_64-pc-windows-msvc\release\pinkbin.exe
+```
+
+生成 ZIP 绿色包：
+
+```powershell
+$portable = "release\Pinkbin_0.1.2_portable"
+New-Item -ItemType Directory -Force $portable
+Copy-Item "target\x86_64-pc-windows-msvc\release\pinkbin.exe" "$portable\Pinkbin.exe"
+Compress-Archive -Path "$portable\Pinkbin.exe" -DestinationPath "release\Pinkbin_0.1.2_portable.zip" -Force
+```
+
+当前 scaffolds 已编译进 EXE，绿色包只需要携带 `Pinkbin.exe`。
+
 需要 **Node 20+ · pnpm 9+ · Rust stable · Tauri 前置依赖**（Windows 上是 VS Build Tools 2022 + WebView2）。
 
 ---
