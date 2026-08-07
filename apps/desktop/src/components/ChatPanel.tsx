@@ -128,8 +128,16 @@ export function ChatPanel() {
   const context = chat.scanId === scanId
     ? chat.scanContext
     : (root ? buildScanContext(root, scaffolds, scanId) : null);
-  const scanStillCurrent = (requestScanId: number | null) => requestScanId === null || (
-    useStore.getState().scanId === requestScanId && useStore.getState().chat.scanId === requestScanId
+  const lastTurnText = chat.turns[chat.turns.length - 1]?.text ?? '';
+  const scanStillCurrent = (requestScanId: number | null) => {
+    const state = useStore.getState();
+    const expectedScanId = requestScanId ?? scanId;
+    return state.scanId === expectedScanId && (
+      requestScanId === null || state.chat.scanId === requestScanId
+    );
+  };
+  const requestStillCurrent = (requestScanId: number | null, turnId: string) => (
+    scanStillCurrent(requestScanId) && useStore.getState().chat.turns.some((turn) => turn.id === turnId)
   );
 
   // A scan id, rather than a path, is the identity of a scan. This means a
@@ -166,8 +174,11 @@ export function ChatPanel() {
   }, [studioRequest?.ts]);
 
   useEffect(() => {
-    scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [chat.turns.length, chat.busy]);
+    scrollerRef.current?.scrollTo({
+      top: scrollerRef.current.scrollHeight,
+      behavior: chat.busy ? 'auto' : 'smooth',
+    });
+  }, [chat.turns.length, chat.busy, lastTurnText]);
 
   const findAllScaffoldNodes = (sc: Scaffold): Node[] => {
     if (!root) return [];
@@ -199,7 +210,8 @@ export function ChatPanel() {
 
     setBusy(true);
     const turnId = uid();
-    pushTurn({ id: turnId, role: 'assistant', text: `正在分析 ${sc.name}…`, pending: true, scaffoldId: sc.id });
+    pushTurn({ id: turnId, role: 'assistant', text: `正在分析 ${sc.name}…`, pending: true, streaming: true, scaffoldId: sc.id });
+    let streamedText = '';
     try {
       const nonEmpty = matches.filter((m) => m.size > 0 || (m.children?.length ?? 0) > 0);
       const sampledMatches = await Promise.all(
@@ -238,17 +250,24 @@ export function ChatPanel() {
         userMessage: userText,
         scanContext: context,
         history,
+      }, (text) => {
+        if (!requestStillCurrent(requestScanId, turnId)) return;
+        streamedText = text;
+        patchTurn(turnId, { text, streaming: true });
       });
-      if (!scanStillCurrent(requestScanId)) return;
-      patchTurn(turnId, { text: reply, pending: false });
+      if (!requestStillCurrent(requestScanId, turnId)) return;
+      patchTurn(turnId, { text: reply, pending: false, streaming: false });
     } catch (e) {
-      if (!scanStillCurrent(requestScanId)) return;
+      if (!requestStillCurrent(requestScanId, turnId)) return;
       patchTurn(turnId, {
-        text: `AI 暂时不可用，但本次扫描上下文仍然保留。你可以先使用下面的推荐动作，或稍后重试。\n\n${String(e)}`,
+        text: streamedText
+          ? `${streamedText}\n\nAI 输出中断，请稍后重试。\n\n${String(e)}`
+          : `AI 暂时不可用，但本次扫描上下文仍然保留。你可以先使用下面的推荐动作，或稍后重试。\n\n${String(e)}`,
         pending: false,
+        streaming: false,
       });
     } finally {
-      if (scanStillCurrent(requestScanId)) setBusy(false);
+      if (requestStillCurrent(requestScanId, turnId)) setBusy(false);
     }
   };
 
@@ -262,22 +281,31 @@ export function ChatPanel() {
       role: 'assistant',
       text: `已载入 ${r.path} · ${formatBytes(r.size)} · ${r.file_count.toLocaleString()} 个文件。AI 正在生成整体解析…`,
       pending: true,
+      streaming: true,
       quickActions,
     });
+    let streamedText = '';
     try {
-      const reply = await overviewChat(buildOverviewSummary(scanContext));
-      if (!scanStillCurrent(requestScanId)) return;
-      patchTurn(turnId, { text: reply, pending: false, quickActions });
+      const reply = await overviewChat(buildOverviewSummary(scanContext), (text) => {
+        if (!requestStillCurrent(requestScanId, turnId)) return;
+        streamedText = text;
+        patchTurn(turnId, { text, streaming: true });
+      });
+      if (!requestStillCurrent(requestScanId, turnId)) return;
+      patchTurn(turnId, { text: reply, pending: false, streaming: false, quickActions });
     } catch (e) {
-      if (!scanStillCurrent(requestScanId)) return;
+      if (!requestStillCurrent(requestScanId, turnId)) return;
       patchTurn(turnId, {
-        text: `AI 总览暂时不可用，但扫描事实已经载入：${scanContext.root_path} 共 ${formatBytes(scanContext.total_size_bytes)}、${scanContext.total_files.toLocaleString()} 个文件。\n\n你不需要再次提供目录，直接选择下面的推荐动作即可。\n\n${String(e)}`,
+        text: streamedText
+          ? `${streamedText}\n\nAI 输出中断，请稍后重试。\n\n${String(e)}`
+          : `AI 总览暂时不可用，但扫描事实已经载入：${scanContext.root_path} 共 ${formatBytes(scanContext.total_size_bytes)}、${scanContext.total_files.toLocaleString()} 个文件。\n\n你不需要再次提供目录，直接选择下面的推荐动作即可。\n\n${String(e)}`,
         pending: false,
+        streaming: false,
         quickActions,
         retryActionId: 'overview',
       });
     } finally {
-      if (scanStillCurrent(requestScanId)) setBusy(false);
+      if (requestStillCurrent(requestScanId, turnId)) setBusy(false);
     }
   };
 
@@ -292,7 +320,7 @@ export function ChatPanel() {
 
     try {
       const response = await cleanupChat({ context, intent: action.prompt, history });
-      if (!scanStillCurrent(requestScanId)) return;
+      if (!requestStillCurrent(requestScanId, turnId)) return;
       patchTurn(turnId, {
         text: response.summary,
         pending: false,
@@ -301,7 +329,7 @@ export function ChatPanel() {
         retryActionId: action.id,
       });
     } catch (e) {
-      if (!scanStillCurrent(requestScanId)) return;
+      if (!requestStillCurrent(requestScanId, turnId)) return;
       const localCandidates = buildLocalCandidates(context, action.id);
       patchTurn(turnId, {
         text: `AI 暂时不可用，下面是基于本机扫描结果的保守清单。未知目录只标为“需要检查”，不会直接建议删除。\n\n${String(e)}`,
@@ -311,7 +339,7 @@ export function ChatPanel() {
         retryActionId: action.id,
       });
     } finally {
-      if (scanStillCurrent(requestScanId)) setBusy(false);
+      if (requestStillCurrent(requestScanId, turnId)) setBusy(false);
     }
   };
 
@@ -350,7 +378,8 @@ export function ChatPanel() {
     pushTurn({ id: uid(), role: 'user', text: userText });
     setBusy(true);
     const turnId = uid();
-    pushTurn({ id: turnId, role: 'assistant', text: '正在结合本次扫描结果分析…', pending: true });
+    pushTurn({ id: turnId, role: 'assistant', text: '正在结合本次扫描结果分析…', pending: true, streaming: true });
+    let streamedText = '';
 
     try {
       const targets = drops.length > 0 && root
@@ -374,17 +403,24 @@ export function ChatPanel() {
         scanContext: context,
         history,
         images: images.length > 0 ? images.map((i) => ({ dataUrl: i.dataUrl, mimeType: i.mimeType })) : undefined,
+      }, (text) => {
+        if (!requestStillCurrent(requestScanId, turnId)) return;
+        streamedText = text;
+        patchTurn(turnId, { text, streaming: true });
       });
-      if (!scanStillCurrent(requestScanId)) return;
-      patchTurn(turnId, { text: reply, pending: false });
+      if (!requestStillCurrent(requestScanId, turnId)) return;
+      patchTurn(turnId, { text: reply, pending: false, streaming: false });
     } catch (e) {
-      if (!scanStillCurrent(requestScanId)) return;
+      if (!requestStillCurrent(requestScanId, turnId)) return;
       patchTurn(turnId, {
-        text: `AI 调用失败，但扫描上下文没有丢失。请重试或直接选择上方推荐动作。\n\n${String(e)}`,
+        text: streamedText
+          ? `${streamedText}\n\nAI 输出中断，请稍后重试。\n\n${String(e)}`
+          : `AI 调用失败，但扫描上下文没有丢失。请重试或直接选择上方推荐动作。\n\n${String(e)}`,
         pending: false,
+        streaming: false,
       });
     } finally {
-      if (scanStillCurrent(requestScanId)) setBusy(false);
+      if (requestStillCurrent(requestScanId, turnId)) setBusy(false);
     }
   };
 
@@ -513,7 +549,7 @@ export function ChatPanel() {
           <QuickActionList actions={buildQuickActions(context)} disabled={chat.busy} onRun={runQuickAction} />
         )}
         {chat.turns.map((turn) => (
-          <div key={turn.id} className={'chat-turn ' + turn.role + (turn.pending ? ' pending' : '')}>
+          <div key={turn.id} className={'chat-turn ' + turn.role + (turn.pending ? ' pending' : '') + (turn.streaming ? ' streaming' : '')}>
             {turn.role === 'assistant' && turn.advice && <AdviceCard advice={turn.advice} />}
             <div className="chat-bubble">
               {turn.role === 'assistant'

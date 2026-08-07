@@ -28,6 +28,7 @@ export interface ChatTurn {
   candidateSource?: 'ai' | 'local';
   retryActionId?: string;
   pending?: boolean;
+  streaming?: boolean;
 }
 
 export interface ChatSession {

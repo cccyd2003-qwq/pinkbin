@@ -14,6 +14,9 @@ import { normalizeCleanupResponse } from './scanContext';
 
 export type Provider = 'openai_responses' | 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
+/** Receives the complete response accumulated so far. */
+export type ChatTextUpdate = (text: string) => void;
+
 export interface AdvisorSettings {
   provider: Provider;
   model: string;
@@ -288,7 +291,192 @@ function dataUrlBase64(dataUrl: string): string {
   return i >= 0 ? dataUrl.slice(i + 1) : dataUrl;
 }
 
-export async function overviewChat(summary: object): Promise<string> {
+async function* readResponseLines(response: Response): AsyncGenerator<string> {
+  if (!response.body) throw new Error('AI streaming response has no body');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+
+      while (true) {
+        const match = buffer.match(/\r\n|\r|\n/);
+        if (!match || match.index === undefined) break;
+        if (match[0] === '\r' && match.index === buffer.length - 1 && !done) break;
+        const index = match.index;
+        const line = buffer.slice(0, index);
+        buffer = buffer.slice(index + match[0].length);
+        yield line;
+      }
+
+      if (done) {
+        if (buffer) yield buffer;
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function* readSseEvents(response: Response): AsyncGenerator<{ event: string; data: string }> {
+  let event = '';
+  let dataLines: string[] = [];
+
+  for await (const line of readResponseLines(response)) {
+    if (line === '') {
+      if (dataLines.length > 0) {
+        yield { event, data: dataLines.join('\n') };
+        event = '';
+        dataLines = [];
+      }
+      continue;
+    }
+
+    if (line.startsWith(':')) continue;
+    if (line.startsWith('event:')) {
+      event = line.slice(6).trim();
+      continue;
+    }
+    if (line.startsWith('data:')) {
+      const data = line.slice(5);
+      dataLines.push(data.startsWith(' ') ? data.slice(1) : data);
+    }
+  }
+
+  if (dataLines.length > 0) yield { event, data: dataLines.join('\n') };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
+}
+
+function parseStreamJson(data: string, provider: string): unknown {
+  try {
+    return JSON.parse(data) as unknown;
+  } catch {
+    throw new Error(`${provider}: invalid stream event`);
+  }
+}
+
+function streamErrorMessage(value: unknown): string | null {
+  const record = asRecord(value);
+  if (record?.error) {
+    if (typeof record.error === 'string') return record.error;
+    const error = asRecord(record.error);
+    if (error && typeof error.message === 'string') return error.message;
+    return 'stream error';
+  }
+  const response = asRecord(record?.response);
+  if (response?.error) {
+    if (typeof response.error === 'string') return response.error;
+    const responseError = asRecord(response.error);
+    if (responseError && typeof responseError.message === 'string') return responseError.message;
+    return 'stream error';
+  }
+  if (typeof record?.message === 'string') return record.message;
+  return null;
+}
+
+function openAiResponsesText(event: string, data: unknown): string {
+  const record = asRecord(data);
+  const error = streamErrorMessage(data);
+  const type = event || (typeof record?.type === 'string' ? record.type : '');
+  if (type === 'error' || type === 'response.error' || type === 'response.failed' || error) {
+    throw new Error(`Responses: ${error ?? 'stream error'}`);
+  }
+  return type === 'response.output_text.delta' && typeof record?.delta === 'string'
+    ? record.delta
+    : '';
+}
+
+function openAiChatText(_event: string, data: unknown): string {
+  const record = asRecord(data);
+  const error = streamErrorMessage(data);
+  if (error) throw new Error(`OpenAI: ${error}`);
+  const choices = Array.isArray(record?.choices) ? record.choices : [];
+  const delta = asRecord(asRecord(choices[0])?.delta);
+  return typeof delta?.content === 'string' ? delta.content : '';
+}
+
+function anthropicText(_event: string, data: unknown): string {
+  const record = asRecord(data);
+  const error = streamErrorMessage(data);
+  if (record?.type === 'error' || error) {
+    throw new Error(`Anthropic: ${error ?? 'stream error'}`);
+  }
+  if (record?.type !== 'content_block_delta') return '';
+  const delta = asRecord(record.delta);
+  return delta?.type === 'text_delta' && typeof delta.text === 'string' ? delta.text : '';
+}
+
+function geminiText(_event: string, data: unknown): string {
+  const record = asRecord(data);
+  const error = streamErrorMessage(data);
+  if (error) throw new Error(`Gemini: ${error}`);
+  const candidates = Array.isArray(record?.candidates) ? record.candidates : [];
+  const content = asRecord(asRecord(candidates[0])?.content);
+  const parts = Array.isArray(content?.parts) ? content.parts : [];
+  return parts
+    .map((part) => asRecord(part)?.text)
+    .filter((text): text is string => typeof text === 'string')
+    .join('');
+}
+
+function ollamaText(data: unknown): string {
+  const error = streamErrorMessage(data);
+  if (error) throw new Error(`Ollama: ${error}`);
+  const record = asRecord(data);
+  const message = asRecord(record?.message);
+  return typeof message?.content === 'string' ? message.content : '';
+}
+
+async function consumeSse(
+  response: Response,
+  provider: string,
+  extractText: (event: string, data: unknown) => string,
+  onText?: ChatTextUpdate,
+): Promise<string> {
+  let text = '';
+  for await (const item of readSseEvents(response)) {
+    if (item.data.trim() === '[DONE]') break;
+    if (!item.data.trim()) continue;
+    const data = parseStreamJson(item.data, provider);
+    const delta = extractText(item.event, data);
+    if (!delta) continue;
+    text += delta;
+    onText?.(text);
+  }
+  const result = text.trim();
+  if (!result) throw new Error('Empty response from advisor');
+  return result;
+}
+
+async function consumeNdjson(
+  response: Response,
+  provider: string,
+  onText?: ChatTextUpdate,
+): Promise<string> {
+  let text = '';
+  for await (const line of readResponseLines(response)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const data = parseStreamJson(trimmed, provider);
+    const delta = ollamaText(data);
+    if (!delta) continue;
+    text += delta;
+    onText?.(text);
+  }
+  const result = text.trim();
+  if (!result) throw new Error('Empty response from advisor');
+  return result;
+}
+
+export async function overviewChat(summary: object, onText?: ChatTextUpdate): Promise<string> {
   const evidenceRules = `
 Evidence rules for this response:
 - The root path, root size, and root file count in scan_context are authoritative.
@@ -297,11 +485,12 @@ Evidence rules for this response:
 - Only mention an application or cleanup capability when it appears in top_entries or known_scaffolds.
 - known_scaffolds.cleanup_supported=false means the app was detected but has no safe cleanup script in this version.
 - Never ask the user to provide the directory list; the scan context is already available.`;
-  return runChatRaw(`${OVERVIEW_SYSTEM}${evidenceRules}`, JSON.stringify(summary, null, 2));
+  return runChatRaw(`${OVERVIEW_SYSTEM}${evidenceRules}`, JSON.stringify(summary, null, 2), undefined, onText);
 }
 
 export async function freeChat(
   request: FreeChatRequest,
+  onText?: ChatTextUpdate,
 ): Promise<string> {
   const blocks = [
     request.scanContext ? `本次扫描上下文（必须优先使用）：\n${JSON.stringify(request.scanContext, null, 2)}` : '',
@@ -316,7 +505,7 @@ Additional rules:
 - When scan_context exists, answer from it and do not ask for a directory list.
 - Never invent paths, applications, or cleanup support.
 - AI is advisory only; never output PowerShell, rm, shell commands, or direct deletion instructions.`;
-  return runChatRaw(`${CHAT_SYSTEM}${chatRules}`, blocks.join('\n\n'), request.images);
+  return runChatRaw(`${CHAT_SYSTEM}${chatRules}`, blocks.join('\n\n'), request.images, onText);
 }
 
 export interface FreeChatRequest {
@@ -346,7 +535,12 @@ export async function cleanupChat(request: CleanupChatRequest): Promise<CleanupC
   return normalizeCleanupResponse(parsed, request.context);
 }
 
-async function runChatRaw(system: string, user: string, images?: ChatImage[]): Promise<string> {
+async function runChatRaw(
+  system: string,
+  user: string,
+  images?: ChatImage[],
+  onText?: ChatTextUpdate,
+): Promise<string> {
   const settings = loadSettings();
   if (!isConfigured(settings)) {
     throw new Error('AI 未配置 — 在右上角的设置里填一个 API key');
@@ -370,9 +564,11 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
         instructions: system,
         input: [{ role: 'user', content: userContent }],
         store: false,
+        ...(onText ? { stream: true } : {}),
       }),
     });
     if (!r.ok) throw new Error(`Responses ${r.status}: ${await r.text()}`);
+    if (onText) return consumeSse(r, 'Responses', openAiResponsesText, onText);
     const data = await r.json();
     return data?.output_text?.trim() ?? '';
   }
@@ -393,9 +589,11 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
           { role: 'system', content: system },
           { role: 'user', content: userContent },
         ],
+        ...(onText ? { stream: true } : {}),
       }),
     });
     if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+    if (onText) return consumeSse(r, 'OpenAI', openAiChatText, onText);
     const data = await r.json();
     return data?.choices?.[0]?.message?.content?.trim() ?? '';
   }
@@ -423,9 +621,11 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
         max_tokens: 4096,
         system,
         messages: [{ role: 'user', content: userContent }],
+        ...(onText ? { stream: true } : {}),
       }),
     });
     if (!r.ok) throw new Error(`Anthropic ${r.status}: ${await r.text()}`);
+    if (onText) return consumeSse(r, 'Anthropic', anthropicText, onText);
     const data = await r.json();
     return extractAnthropicText(data);
   }
@@ -435,8 +635,11 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
     for (const img of imgs) {
       parts.push({ inline_data: { mime_type: img.mimeType, data: dataUrlBase64(img.dataUrl) } });
     }
+    const endpoint = onText
+      ? `${url}/v1beta/models/${encodeURIComponent(settings.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(settings.apiKey)}`
+      : `${url}/v1beta/models/${encodeURIComponent(settings.model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
     const r = await fetch(
-      `${url}/v1beta/models/${encodeURIComponent(settings.model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`,
+      endpoint,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -448,6 +651,7 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
       },
     );
     if (!r.ok) throw new Error(`Gemini ${r.status}: ${await r.text()}`);
+    if (onText) return consumeSse(r, 'Gemini', geminiText, onText);
     const data = await r.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
   }
@@ -460,7 +664,7 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: settings.model,
-      stream: false,
+      stream: Boolean(onText),
       messages: [
         { role: 'system', content: system },
         userMsg,
@@ -468,6 +672,7 @@ async function runChatRaw(system: string, user: string, images?: ChatImage[]): P
     }),
   });
   if (!r.ok) throw new Error(`Ollama ${r.status}: ${await r.text()}`);
+  if (onText) return consumeNdjson(r, 'Ollama', onText);
   const data = await r.json();
   return data?.message?.content?.trim() ?? '';
 }
