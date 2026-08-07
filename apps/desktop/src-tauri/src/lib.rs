@@ -5,8 +5,9 @@ use std::time::{Duration, SystemTime};
 
 use include_dir::{include_dir, Dir};
 use pinkbin_advisor::{
-    advise as advise_provider, test_connection as test_advisor_connection, AdvisorRequest,
-    AdvisorResponse, Provider,
+    advise as advise_provider, list_models as list_advisor_models_provider,
+    test_connection as test_advisor_connection, AdvisorRequest, AdvisorResponse, ModelOption,
+    Provider,
 };
 use pinkbin_executor::{execute, Plan, UndoEntry};
 use pinkbin_scaffold::{
@@ -1353,6 +1354,29 @@ async fn detect_and_set_advisor(
     Err(format!("未探测到可用 AI 协议（{}）", failures.join("；")))
 }
 
+#[tauri::command]
+async fn list_advisor_models(
+    api_key: Option<String>,
+    base_url: String,
+) -> Result<Vec<ModelOption>, String> {
+    list_advisor_models_provider(api_key.as_deref(), &base_url)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn configure_advisor(
+    state: State<'_, AppState>,
+    provider: String,
+    api_key: Option<String>,
+    model: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let provider = provider_from_config(provider, api_key, model, base_url)?;
+    *state.advisor.lock().unwrap() = Some(provider);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -1400,6 +1424,8 @@ pub fn run() {
             reveal_in_explorer,
             execute_plan,
             detect_and_set_advisor,
+            list_advisor_models,
+            configure_advisor,
             volume_info,
             list_steam_games,
             list_steam_workshop_items,
