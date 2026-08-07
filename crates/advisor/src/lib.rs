@@ -37,6 +37,11 @@ pub struct AdvisorResponse {
 
 #[derive(Clone, Debug)]
 pub enum Provider {
+    OpenAIResponses {
+        api_key: String,
+        model: String,
+        base_url: String,
+    },
     OpenAI {
         api_key: String,
         model: String,
@@ -84,6 +89,30 @@ pub async fn advise(provider: &Provider, req: &AdvisorRequest) -> anyhow::Result
     let user_prompt = serde_json::to_string_pretty(req)?;
 
     let raw = match provider {
+        Provider::OpenAIResponses {
+            api_key,
+            model,
+            base_url,
+        } => {
+            let body = serde_json::json!({
+                "model": model,
+                "instructions": SYSTEM,
+                "input": user_prompt,
+                "store": false,
+            });
+            let r = client
+                .post(format!("{}/responses", base_url.trim_end_matches('/')))
+                .bearer_auth(api_key)
+                .json(&body)
+                .send()
+                .await?
+                .error_for_status()?;
+            let v: serde_json::Value = r.json().await?;
+            v["output_text"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("responses: missing output_text"))?
+                .to_string()
+        }
         Provider::OpenAI {
             api_key,
             model,

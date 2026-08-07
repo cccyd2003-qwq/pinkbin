@@ -1264,6 +1264,11 @@ fn provider_from_config(
     base_url: Option<String>,
 ) -> Result<Provider, String> {
     let p = match provider.as_str() {
+        "openai_responses" => Provider::OpenAIResponses {
+            api_key: api_key.ok_or_else(|| "api_key required".to_string())?,
+            model,
+            base_url: base_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
+        },
         "openai" => Provider::OpenAI {
             api_key: api_key.ok_or_else(|| "api_key required".to_string())?,
             model,
@@ -1289,28 +1294,63 @@ fn provider_from_config(
     Ok(p)
 }
 
-#[tauri::command]
-fn set_advisor(
-    state: State<'_, AppState>,
-    provider: String,
-    api_key: Option<String>,
-    model: String,
-    base_url: Option<String>,
-) -> Result<(), String> {
-    let p = provider_from_config(provider, api_key, model, base_url)?;
-    *state.advisor.lock().unwrap() = Some(p);
-    Ok(())
+const PROVIDER_PROBE_ORDER: [&str; 5] = [
+    "openai_responses",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ollama",
+];
+
+fn provider_probe_candidates(
+    api_key: Option<&str>,
+    model: &str,
+    base_url: &str,
+) -> Vec<(String, Provider)> {
+    let names: &[&str] = if api_key.is_some_and(|key| !key.trim().is_empty()) {
+        &PROVIDER_PROBE_ORDER
+    } else {
+        &["ollama"]
+    };
+
+    names
+        .iter()
+        .filter_map(|provider| {
+            provider_from_config(
+                (*provider).to_string(),
+                api_key.map(ToString::to_string),
+                model.to_string(),
+                Some(base_url.to_string()),
+            )
+            .ok()
+            .map(|config| ((*provider).to_string(), config))
+        })
+        .collect()
 }
 
 #[tauri::command]
-async fn test_advisor(
-    provider: String,
+async fn detect_and_set_advisor(
+    state: State<'_, AppState>,
     api_key: Option<String>,
     model: String,
     base_url: Option<String>,
-) -> Result<(), String> {
-    let p = provider_from_config(provider, api_key, model, base_url)?;
-    test_advisor_connection(&p).await.map_err(|e| e.to_string())
+) -> Result<String, String> {
+    let base_url = base_url.unwrap_or_default();
+    let mut failures = Vec::new();
+
+    for (name, provider) in provider_probe_candidates(api_key.as_deref(), &model, &base_url) {
+        match test_advisor_connection(&provider).await {
+            Ok(()) => {
+                *state.advisor.lock().unwrap() = Some(provider);
+                return Ok(name);
+            }
+            // Reqwest errors may include the full Gemini request URL, whose
+            // query string contains the API key. Keep diagnostics secret-safe.
+            Err(_) => failures.push(name),
+        }
+    }
+
+    Err(format!("未探测到可用 AI 协议（{}）", failures.join("；")))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1359,8 +1399,7 @@ pub fn run() {
             inspect_path,
             reveal_in_explorer,
             execute_plan,
-            set_advisor,
-            test_advisor,
+            detect_and_set_advisor,
             volume_info,
             list_steam_games,
             list_steam_workshop_items,
@@ -1496,5 +1535,46 @@ mod tests {
             !leaked,
             "lowercase $recycle.bin variant must also be pruned"
         );
+    }
+
+    fn provider_name(provider: &Provider) -> &'static str {
+        match provider {
+            Provider::OpenAIResponses { .. } => "openai_responses",
+            Provider::OpenAI { .. } => "openai",
+            Provider::Anthropic { .. } => "anthropic",
+            Provider::Gemini { .. } => "gemini",
+            Provider::Ollama { .. } => "ollama",
+        }
+    }
+
+    #[test]
+    fn provider_probe_candidates_follow_the_fixed_order_when_key_is_present() {
+        let candidates = provider_probe_candidates(Some("key"), "model", "https://example.test/v1");
+        let names: Vec<&str> = candidates
+            .iter()
+            .map(|(_, provider)| provider_name(provider))
+            .collect();
+
+        assert_eq!(
+            names,
+            [
+                "openai_responses",
+                "openai",
+                "anthropic",
+                "gemini",
+                "ollama"
+            ]
+        );
+    }
+
+    #[test]
+    fn provider_probe_candidates_only_try_ollama_without_a_key() {
+        let candidates = provider_probe_candidates(None, "llama3", "http://localhost:11434");
+        let names: Vec<&str> = candidates
+            .iter()
+            .map(|(_, provider)| provider_name(provider))
+            .collect();
+
+        assert_eq!(names, ["ollama"]);
     }
 }

@@ -12,7 +12,7 @@ import type {
 } from './types';
 import { isTauri } from './env';
 import * as mocks from './mocks';
-import { testAdvisor as testAdvisorInBrowser } from './advisorClient';
+import { detectAdvisorProvider } from './advisorClient';
 
 export const api = {
   scan: (path: string) =>
@@ -87,40 +87,18 @@ export const api = {
   estimateSize: (path: string) =>
     isTauri ? invoke<number>('estimate_size', { path }) : Promise.resolve(0),
 
-  setAdvisor: (
-    provider: 'openai' | 'anthropic' | 'gemini' | 'ollama',
+  detectAndSetAdvisor: (
     model: string,
     apiKey?: string,
     baseUrl?: string,
   ) =>
     isTauri
-      ? invoke<void>('set_advisor', {
-          provider,
+      ? invoke<'openai_responses' | 'openai' | 'anthropic' | 'gemini' | 'ollama'>('detect_and_set_advisor', {
           apiKey: apiKey ?? null,
           model,
           baseUrl: baseUrl ?? null,
         })
-      : Promise.resolve(),
-
-  testAdvisor: (
-    provider: 'openai' | 'anthropic' | 'gemini' | 'ollama',
-    model: string,
-    apiKey?: string,
-    baseUrl?: string,
-  ) =>
-    isTauri
-      ? invoke<void>('test_advisor', {
-          provider,
-          apiKey: apiKey ?? null,
-          model,
-          baseUrl: baseUrl ?? null,
-        })
-      : testAdvisorInBrowser({
-          provider,
-          model,
-          apiKey: apiKey ?? '',
-          baseUrl: baseUrl ?? '',
-        }),
+      : detectAdvisorProvider(model, apiKey ?? '', baseUrl ?? ''),
 
   listSteamGames: () =>
     isTauri
