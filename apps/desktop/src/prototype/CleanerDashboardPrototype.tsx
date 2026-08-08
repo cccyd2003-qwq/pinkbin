@@ -36,10 +36,9 @@ import {
 } from 'lucide-react';
 import './CleanerDashboardPrototype.css';
 
-// PROTOTYPE: Three variants of the cleaner dashboard, switchable via
-// ?prototype=cleaner&variant=A|B|C on the existing desktop route.
+// PROTOTYPE: A composed cleaner workspace. A is the home surface, B is space
+// analysis, and C is the advanced cleanup/review workbench.
 
-type VariantKey = 'A' | 'B' | 'C';
 type Surface = 'home' | 'space' | 'packs' | 'history' | 'settings';
 type Risk = 'low' | 'medium' | 'high';
 
@@ -175,12 +174,6 @@ const CLEANUP_ITEMS: CleanupItem[] = [
   },
 ];
 
-const VARIANTS: { key: VariantKey; name: string; note: string }[] = [
-  { key: 'A', name: '任务卡首页', note: '低认知负担' },
-  { key: 'B', name: '空间地图', note: '先解释占用' },
-  { key: 'C', name: '审核工作台', note: '高级用户' },
-];
-
 const NAV_ITEMS: { id: Surface; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: '首页', icon: LayoutDashboard },
   { id: 'space', label: '空间分析', icon: HardDrive },
@@ -220,37 +213,6 @@ function SizeValue({ bytes }: { bytes: number }) {
   return <span className="cleaner-size mono-num">{formatSize(bytes)}</span>;
 }
 
-function PrototypeSwitcher({ variant, onChange }: { variant: VariantKey; onChange: (key: VariantKey) => void }) {
-  const index = VARIANTS.findIndex((item) => item.key === variant);
-  const cycle = (direction: number) => {
-    const next = VARIANTS[(index + direction + VARIANTS.length) % VARIANTS.length].key;
-    const url = new URL(window.location.href);
-    url.searchParams.set('prototype', 'cleaner');
-    url.searchParams.set('variant', next);
-    window.history.replaceState({}, '', url);
-    onChange(next);
-  };
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
-      if (event.key === 'ArrowLeft') cycle(-1);
-      if (event.key === 'ArrowRight') cycle(1);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
-
-  return (
-    <div className="cleaner-prototype-switcher" aria-label="原型变体切换">
-      <button type="button" onClick={() => cycle(-1)} aria-label="上一个变体">←</button>
-      <span><b>{variant}</b> · {VARIANTS[index].name}<small>{VARIANTS[index].note}</small></span>
-      <button type="button" onClick={() => cycle(1)} aria-label="下一个变体">→</button>
-    </div>
-  );
-}
-
 function PrototypeNav({ active, onNavigate, compact = false }: { active: Surface; onNavigate: (surface: Surface) => void; compact?: boolean }) {
   return (
     <nav className={compact ? 'cleaner-nav cleaner-nav-compact' : 'cleaner-nav'}>
@@ -277,6 +239,20 @@ function ScanStatus({ scanning, onScan }: { scanning: boolean; onScan: () => voi
       <button type="button" onClick={onScan} disabled={scanning}><RefreshCw size={13} /> 重新扫描</button>
     </div>
   );
+}
+
+function getInitialSurface(): Surface {
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get('surface');
+  if (requested === 'home' || requested === 'space' || requested === 'packs' || requested === 'history' || requested === 'settings') {
+    return requested;
+  }
+
+  // Keep the comparison URLs useful while the prototype is being reviewed.
+  const legacyVariant = params.get('variant');
+  if (legacyVariant === 'B') return 'space';
+  if (legacyVariant === 'C') return 'packs';
+  return 'home';
 }
 
 function SelectionButton({ item, selected, onToggle }: { item: CleanupItem; selected: boolean; onToggle: () => void }) {
@@ -464,11 +440,7 @@ function DetailPopover({ item, onClose, onAsk }: { item: CleanupItem; onClose: (
 }
 
 export function CleanerDashboardPrototype() {
-  const [variant, setVariant] = useState<VariantKey>(() => {
-    const value = new URLSearchParams(window.location.search).get('variant');
-    return value === 'B' || value === 'C' ? value : 'A';
-  });
-  const [activeSurface, setActiveSurface] = useState<Surface>('home');
+  const [activeSurface, setActiveSurface] = useState<Surface>(getInitialSurface);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(CLEANUP_ITEMS.filter((item) => item.defaultSelected).map((item) => item.id)));
   const [inspected, setInspected] = useState<CleanupItem | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -518,16 +490,20 @@ export function CleanerDashboardPrototype() {
   };
   const navigate = (surface: Surface) => {
     setActiveSurface(surface);
-    if (surface !== 'home') setToast(`${NAV_ITEMS.find((item) => item.id === surface)?.label} 原型页面已预留。`);
+    const url = new URL(window.location.href);
+    url.searchParams.set('prototype', 'cleaner');
+    url.searchParams.set('surface', surface);
+    url.searchParams.delete('variant');
+    window.history.replaceState({}, '', url);
+    if (surface !== 'home' && surface !== 'space' && surface !== 'packs') setToast(`${NAV_ITEMS.find((item) => item.id === surface)?.label} 页面将在后续接入。`);
     window.setTimeout(() => setToast(null), 2400);
   };
 
   return (
     <div className="cleaner-prototype-shell">
-      {variant === 'A' && <VariantA activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} cleaned={cleaned} />}
-      {variant === 'B' && <VariantB activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} />}
-      {variant === 'C' && <VariantC activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} />}
-      <PrototypeSwitcher variant={variant} onChange={setVariant} />
+      {activeSurface === 'space' && <VariantB activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} />}
+      {activeSurface === 'packs' && <VariantC activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} />}
+      {activeSurface !== 'space' && activeSurface !== 'packs' && <VariantA activeSurface={activeSurface} onNavigate={navigate} items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onInspect={inspect} onReview={() => setReviewOpen(true)} scanning={scanning} onScan={startScan} cleaned={cleaned} />}
       {inspected && <DetailPopover item={inspected} onClose={() => setInspected(null)} onAsk={askAi} />}
       {reviewOpen && <ReviewSheet items={CLEANUP_ITEMS} selectedIds={selectedIds} onToggle={toggle} onClose={() => setReviewOpen(false)} onConfirm={confirmClean} />}
       {toast && <div className="cleaner-prototype-toast"><Sparkles size={14} />{toast}</div>}

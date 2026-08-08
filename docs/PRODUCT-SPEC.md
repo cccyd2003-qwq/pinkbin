@@ -125,6 +125,7 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 - Model the product around `ScanContext`, `专项包`, `scope`, `CleanupCandidate`, `CleanupPlan`, `清理任务状态`, and `本地扫描报告`. The scan result is evidence; the recommendation is derived; the plan is explicitly user-owned after人工审核.
 - Use two task entry points: 快速清理 for known bounded roots and low-risk defaults, and 专项清理 for category/app exploration and experimental ranges.
 - Keep the main navigation as 首页、空间分析、专项包、历史/恢复、设置. Scan, review, and execution are task states inside those areas.
+- Assign the three prototype directions to concrete product roles: A is the default 首页 because its task cards and risk-first summary minimize decision cost; B is 空间分析 because its semantic map makes large-space ownership and drill-down legible; C is the advanced 专项清理 / execution-review workbench, not a competing home layout.
 - Present results in a risk-first hierarchy, with category and pack grouping below it. Use result cards for conclusions, path lists for audit, and a语义空间图 for full-disk exploration.
 - Keep user content discoverable but `仅建议查看`; never let it enter the default cleanup selection.
 - Default low-risk rebuildable content to selected, require explicit selection for medium risk, and keep high-risk content view-only unless a future reviewed flow says otherwise.
@@ -161,4 +162,4 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 
 - The product should be judged by safe and accurate recommendations, not by the number of cleanup suggestions. A smaller trustworthy result beats a larger noisy one.
 - The broad “全部专项包” goal is intentionally constrained by stable/experimental scope labels and rule-pack governance. The first implementation should prove the shared workflow with representative stable and experimental scopes before expanding coverage indefinitely.
-- The next delivery has two parts: publish this specification as a ready-for-agent issue, then build the read-only UI prototype with three structurally different variants on the current desktop route. The prototype question is: which hierarchy best balances quick cleanup, semantic space explanation, and auditability?
+- The prototype direction is decided: compose A (首页), B (空间分析), and C (专项清理 / 执行前复核) into one coherent navigation model. Keep the evidence and interactions read-only until the production seams for scanning, planning, isolation, and restore are connected.
