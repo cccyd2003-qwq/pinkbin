@@ -181,7 +181,7 @@ const CLEANUP_ITEMS: CleanupItem[] = [
 const NAV_ITEMS: { id: Surface; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: '首页', icon: LayoutDashboard },
   { id: 'space', label: '空间分析', icon: HardDrive },
-  { id: 'packs', label: '专项包', icon: PackageOpen },
+  { id: 'packs', label: '深度清理', icon: PackageOpen },
   { id: 'history', label: '历史 / 恢复', icon: History },
   { id: 'settings', label: '设置', icon: Settings2 },
 ];
@@ -236,9 +236,9 @@ function SizeValue({ bytes }: { bytes: number }) {
   return <span className="cleaner-size mono-num">{formatSize(bytes)}</span>;
 }
 
-function PrototypeNav({ active, onNavigate, compact = false }: { active: Surface; onNavigate: (surface: Surface) => void; compact?: boolean }) {
+function PrototypeNav({ active, onNavigate }: { active: Surface; onNavigate: (surface: Surface) => void }) {
   return (
-    <nav className={compact ? 'cleaner-nav cleaner-nav-compact' : 'cleaner-nav'}>
+    <nav className="cleaner-nav" aria-label="主导航">
       {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
         <button
           type="button"
@@ -246,11 +246,23 @@ function PrototypeNav({ active, onNavigate, compact = false }: { active: Surface
           className={active === id ? 'is-active' : ''}
           onClick={() => onNavigate(id)}
         >
-          <Icon size={compact ? 15 : 16} />
+          <Icon size={16} />
           <span>{label}</span>
         </button>
       ))}
     </nav>
+  );
+}
+
+function CleanerSidebar({ activeSurface, onNavigate, scanRoot, totalBytes }: { activeSurface: Surface; onNavigate: (surface: Surface) => void; scanRoot: string; totalBytes: number }) {
+  return (
+    <aside className="cleaner-sidebar">
+      <div className="cleaner-brand"><span className="cleaner-brand-mark"><Zap size={17} fill="currentColor" /></span><strong>pinkbin</strong><small>DISK CARE</small></div>
+      <div className="cleaner-sidebar-caption">你的电脑</div>
+      <div className="cleaner-drive-chip"><HardDrive size={16} /><span><strong>{scanRoot}</strong><small>{formatSize(totalBytes)} 已用</small></span><span className="cleaner-drive-dot" /></div>
+      <PrototypeNav active={activeSurface} onNavigate={onNavigate} />
+      <div className="cleaner-sidebar-foot"><ShieldCheck size={14} /><span>本地优先<br /><small>不读取文件内容</small></span></div>
+    </aside>
   );
 }
 
@@ -348,9 +360,9 @@ function SurfaceNote({ surface }: { surface: Surface }) {
   const data: Record<Surface, { eyebrow: string; title: string; copy: string; icon: LucideIcon }> = {
     home: { eyebrow: '快速清理', title: '先从能安全释放的空间开始', copy: '选择首页查看本次扫描摘要。', icon: LayoutDashboard },
     space: { eyebrow: '空间分析', title: '看懂这些空间从哪里来', copy: '完整扫描后的语义空间图和目录下钻会放在这里。', icon: HardDrive },
-    packs: { eyebrow: '专项包', title: '把复杂应用拆成可审查的范围', copy: '稳定范围默认可用，实验范围需要主动开启。', icon: PackageOpen },
+    packs: { eyebrow: '深度清理', title: '把复杂应用拆成可审查的范围', copy: '稳定范围默认可用，实验范围需要主动开启。', icon: PackageOpen },
     history: { eyebrow: '历史 / 恢复', title: '每次清理都有记录和退路', copy: '本地报告、隔离区和恢复入口会在这里汇合。', icon: History },
-    settings: { eyebrow: '设置', title: '把控制权留在你手里', copy: '管理扫描根目录、排除项、AI 和专项包更新。', icon: Settings2 },
+    settings: { eyebrow: '设置', title: '把控制权留在你手里', copy: '管理扫描根目录、排除项、AI 和深度清理规则更新。', icon: Settings2 },
   };
   const value = data[surface];
   const Icon = value.icon;
@@ -365,13 +377,7 @@ function VariantA({ activeSurface, onNavigate, items, selectedIds, onToggle, onI
   const defaultSelectedBytes = items.filter((item) => item.defaultSelected).reduce((sum, item) => sum + item.size, 0);
   return (
     <div className="cleaner-variant cleaner-variant-a">
-      <aside className="cleaner-sidebar">
-        <div className="cleaner-brand"><span className="cleaner-brand-mark"><Zap size={17} fill="currentColor" /></span><strong>pinkbin</strong><small>DISK CARE</small></div>
-        <div className="cleaner-sidebar-caption">你的电脑</div>
-        <div className="cleaner-drive-chip"><HardDrive size={16} /><span><strong>{scanRoot}</strong><small>{formatSize(totalBytes)} 已用</small></span><span className="cleaner-drive-dot" /></div>
-        <PrototypeNav active={activeSurface} onNavigate={onNavigate} />
-        <div className="cleaner-sidebar-foot"><ShieldCheck size={14} /><span>本地优先<br /><small>不读取文件内容</small></span></div>
-      </aside>
+      <CleanerSidebar activeSurface={activeSurface} onNavigate={onNavigate} scanRoot={scanRoot} totalBytes={totalBytes} />
       <main className="cleaner-a-main">
         <ScanStatus scanning={scanning} onScan={onScan} summary={scanSummary} />
         {activeSurface !== 'home' ? <SurfaceNote surface={activeSurface} /> : (
@@ -414,8 +420,10 @@ function VariantB({ activeSurface, onNavigate, items, selectedIds, onToggle, onI
   }));
   return (
     <div className="cleaner-variant cleaner-variant-b">
-      <header className="cleaner-b-topbar"><div className="cleaner-brand"><span className="cleaner-brand-mark"><Zap size={17} fill="currentColor" /></span><strong>pinkbin</strong></div><PrototypeNav active={activeSurface} onNavigate={onNavigate} compact /><div className="cleaner-topbar-actions"><button type="button" className="cleaner-plain-button"><CircleHelp size={16} /></button><button type="button" className="cleaner-plain-button"><Settings2 size={16} /></button><button type="button" className="cleaner-button cleaner-button-primary" onClick={onReview} disabled={!selectedIds.size}><Archive size={14} /> 清理 {formatSize(selectedBytes)}</button></div></header>
-      <main className="cleaner-b-main">
+      <CleanerSidebar activeSurface={activeSurface} onNavigate={onNavigate} scanRoot={scanRoot} totalBytes={totalBytes} />
+      <div className="cleaner-b-workspace">
+        <header className="cleaner-b-topbar"><div className="cleaner-topbar-actions"><button type="button" className="cleaner-plain-button"><CircleHelp size={16} /></button><button type="button" className="cleaner-plain-button"><Settings2 size={16} /></button><button type="button" className="cleaner-button cleaner-button-primary" onClick={onReview} disabled={!selectedIds.size}><Archive size={14} /> 清理 {formatSize(selectedBytes)}</button></div></header>
+        <main className="cleaner-b-main">
         <div className="cleaner-b-heading"><div><span className="cleaner-kicker">空间分析 · {scanRoot}</span><h1>{formatSize(totalBytes)} <span>已用</span></h1><p>拖动和点击空间块，查看它们的来源与清理建议。</p></div><div className="cleaner-b-scan"><div className="cleaner-b-gauge"><span>{items.length ? Math.round((items.reduce((sum, item) => sum + item.size, 0) / Math.max(totalBytes, 1)) * 100) : 0}%</span></div><span><strong>已扫描</strong><small>{items.length} 个位置 · {scanning ? '扫描中…' : scanSummary}</small></span><button type="button" className="cleaner-plain-button" onClick={onScan}><RefreshCw size={15} /></button></div></div>
         {activeSurface !== 'space' && activeSurface !== 'home' ? <SurfaceNote surface={activeSurface} /> : (
           <>
@@ -423,25 +431,29 @@ function VariantB({ activeSurface, onNavigate, items, selectedIds, onToggle, onI
             <div className="cleaner-b-bottom"><div><span className="cleaner-kicker">当前清理计划</span><strong>{formatSize(selectedBytes)}</strong><span>{selectedIds.size} 个可重建范围已选择</span></div><button type="button" className="cleaner-button cleaner-button-primary" onClick={onReview} disabled={!selectedIds.size}>进入复核 <ArrowRight size={14} /></button></div>
           </>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
 
-function VariantC({ activeSurface, onNavigate, items, selectedIds, onToggle, onInspect, onReview, scanning, onScan }: VariantProps) {
+function VariantC({ activeSurface, onNavigate, items, selectedIds, onToggle, onInspect, onReview, scanning, onScan, scanRoot, totalBytes }: VariantProps) {
   const [filter, setFilter] = useState<'all' | Risk>('all');
   const visible = filter === 'all' ? items : items.filter((item) => item.risk === filter);
   const selectedBytes = items.filter((item) => selectedIds.has(item.id)).reduce((sum, item) => sum + item.size, 0);
   return (
     <div className="cleaner-variant cleaner-variant-c">
-      <header className="cleaner-c-header"><div className="cleaner-c-title"><PanelLeft size={17} /><div><span className="cleaner-kicker">专项清理 · 审核工作台</span><h1>清理计划</h1></div></div><PrototypeNav active={activeSurface} onNavigate={onNavigate} compact /><div className="cleaner-c-header-meta"><span><Clock3 size={14} />扫描于刚刚</span><button type="button" className="cleaner-button cleaner-button-quiet" onClick={onScan}><RefreshCw size={14} /> {scanning ? '扫描中…' : '重新扫描'}</button></div></header>
-      {activeSurface !== 'packs' && activeSurface !== 'home' ? <SurfaceNote surface={activeSurface} /> : (
-        <main className="cleaner-c-main">
+      <CleanerSidebar activeSurface={activeSurface} onNavigate={onNavigate} scanRoot={scanRoot} totalBytes={totalBytes} />
+      <div className="cleaner-c-workspace">
+        <header className="cleaner-c-header"><div className="cleaner-c-title"><PanelLeft size={17} /><div><span className="cleaner-kicker">深度清理 · 审核工作台</span><h1>清理计划</h1></div></div><div className="cleaner-c-header-meta"><span><Clock3 size={14} />扫描于刚刚</span><button type="button" className="cleaner-button cleaner-button-quiet" onClick={onScan}><RefreshCw size={14} /> {scanning ? '扫描中…' : '重新扫描'}</button></div></header>
+        {activeSurface !== 'packs' && activeSurface !== 'home' ? <SurfaceNote surface={activeSurface} /> : (
+          <main className="cleaner-c-main">
           <aside className="cleaner-c-filter"><div className="cleaner-c-filter-top"><span className="cleaner-kicker">筛选</span><SlidersHorizontal size={15} /></div><div className="cleaner-filter-search"><Search size={14} /><input placeholder="搜索应用或路径" /></div><div className="cleaner-c-filter-label">风险</div>{(['all', 'low', 'medium', 'high'] as const).map((value) => <button type="button" key={value} className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}><span className={`filter-marker filter-marker-${value}`} />{value === 'all' ? '全部范围' : value === 'low' ? '可直接清理' : value === 'medium' ? '需要确认' : '仅建议查看'}<small>{value === 'all' ? items.length : items.filter((item) => item.risk === value).length}</small></button>)}<div className="cleaner-c-filter-label">类别</div>{GROUPS.map(({ id, label, icon: Icon }) => <button type="button" key={id} className="cleaner-filter-category"><Icon size={14} />{label}<small>{items.filter((item) => item.group === id).length}</small></button>)}<div className="cleaner-c-filter-foot"><LockKeyhole size={13} />系统保护路径已排除</div></aside>
           <section className="cleaner-c-table-section"><div className="cleaner-c-table-head"><div><span className="cleaner-kicker">{visible.length} 个范围 · {filter === 'all' ? '全部' : filter === 'low' ? '低风险' : filter === 'medium' ? '需确认' : '仅查看'}</span><h2>逐项审核选择</h2></div><button type="button" className="cleaner-text-button"><FileSearch size={14} />打开完整报告</button></div><div className="cleaner-c-table"><div className="cleaner-table-header"><span>选择</span><span>范围</span><span>风险</span><span>大小</span><span>状态</span><span /></div>{visible.map((item) => <div className={`cleaner-table-row ${selectedIds.has(item.id) ? 'is-selected' : ''}`} key={item.id}><SelectionButton item={item} selected={selectedIds.has(item.id)} onToggle={() => onToggle(item.id)} /><button type="button" className="cleaner-table-item" onClick={() => onInspect(item)}><IconTile icon={item.icon} tone={item.tone} /><span><strong>{item.title}</strong><small>{item.subtitle}</small></span></button><RiskLabel risk={item.risk} text={item.label} /><SizeValue bytes={item.size} /><span className={`cleaner-task-state cleaner-task-${(item.status ?? '等待中').replace('中', '').replace('已', '')}`}>{item.status ?? '等待中'}</span><button type="button" className="cleaner-icon-button" onClick={() => onInspect(item)}><ChevronRight size={15} /></button></div>)}</div></section>
           <aside className="cleaner-c-plan"><div className="cleaner-c-plan-head"><div><span className="cleaner-kicker">待执行</span><h2>清理计划</h2></div><Archive size={19} /></div><div className="cleaner-c-plan-number">{formatSize(selectedBytes)}<small>预计可释放</small></div><div className="cleaner-c-plan-bar"><span style={{ width: `${Math.min(100, (selectedBytes / (40 * GB)) * 100)}%` }} /></div><div className="cleaner-c-plan-list">{items.filter((item) => selectedIds.has(item.id)).map((item) => <div key={item.id}><span className="plan-status-dot" /><span>{item.title}</span><SizeValue bytes={item.size} /></div>)}{!selectedIds.size && <div className="cleaner-plan-empty">从左侧选择低风险范围，计划会显示在这里。</div>}</div><div className="cleaner-c-plan-note"><ShieldCheck size={14} /><span>默认进入隔离区<br /><small>7 天内可恢复 · 不读取文件内容</small></span></div><button type="button" className="cleaner-button cleaner-button-primary cleaner-button-wide" onClick={onReview} disabled={!selectedIds.size}><Archive size={15} /> 复核并隔离</button></aside>
-        </main>
-      )}
+          </main>
+        )}
+      </div>
     </div>
   );
 }

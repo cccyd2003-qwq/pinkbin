@@ -13,7 +13,7 @@ Pinkbin 当前已有磁盘扫描、应用专项包、规则化 scope、回收/�
 Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同时提供两个入口：
 
 - **快速清理**：扫描所有本地磁盘上的已知、边界明确的低风险位置，直接给出按风险优先组织的结果卡片。
-- **专项清理**：按应用或工作流深入查看开发环境、游戏、模型、通信软件和媒体相关内容，允许下钻到具体路径。
+- **深度清理**：按应用或工作流深入查看开发环境、游戏、模型、通信软件和媒体相关内容，允许下钻到具体路径。内部规则由专项包提供。
 
 产品的核心承诺是“释放空间前先看懂空间”，而不是“让电脑变快”或“自动替你决定删除什么”。每项清理建议都必须说明对象是什么、为什么可能可清理、会影响什么、是否可重建、是否可恢复以及当前风险标签。
 
@@ -22,7 +22,7 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 ```text
 首次快速扫描
   → 风险优先结果卡片
-  → 按类别/专项包查看详情
+  → 按类别/深度清理查看详情
   → 语义空间图或路径列表下钻
   → 复核页调整选择
   → 隔离删除
@@ -62,8 +62,8 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 21. As a 普通用户, I want to 低风险、可重建内容默认被选择, so that 常见清理不需要逐个勾选。
 22. As a 用户, I want to 中风险内容必须经过主动选择, so that “建议清理”不会被误解为“已经授权删除”。
 23. As a 用户, I want to 高风险和用户内容只能查看不能进入默认清理集合, so that Pinkbin 的默认行为保持保守。
-24. As a 用户, I want to 按专项包、scope 或类别调整选择, so that 我可以一次清理一个明确的范围。
-25. As a 用户, I want to 从专项包继续下钻到单个路径, so that 我可以保留某个位置而清理同类的其他位置。
+24. As a 用户, I want to 按深度清理范围、scope 或类别调整选择, so that 我可以一次清理一个明确的范围。
+25. As a 用户, I want to 从深度清理范围继续下钻到单个路径, so that 我可以保留某个位置而清理同类的其他位置。
 26. As a 用户, I want to 在复核页看到所有即将处理的路径和总大小, so that 最终确认具备可审查性。
 27. As a 用户, I want to 在复核页看到每项风险、原因、可重建性和可能影响, so that 我能做有根据的取舍。
 28. As a 用户, I want to 一键取消某个结果卡片或单个路径, so that Pinkbin 不会强迫我接受整套建议。
@@ -124,9 +124,9 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 - Keep the existing scanner, scaffold/rule-pack, advisor, executor, and local report concepts as the main seams. Add the product surface as a read model over scan facts and cleanup recommendations rather than making the UI re-scan or re-classify the tree.
 - Keep the cleaner UI behind one read-model seam: `api.scan` provides evidence, `buildScanContext` and `buildLocalCandidates` apply the existing local rules, and `buildCleanerReadModel` adapts the result for A/B/C. The UI must not reclassify paths or promote an unreviewed scope to default selection.
 - Model the product around `ScanContext`, `专项包`, `scope`, `CleanupCandidate`, `CleanupPlan`, `清理任务状态`, and `本地扫描报告`. The scan result is evidence; the recommendation is derived; the plan is explicitly user-owned after人工审核.
-- Use two task entry points: 快速清理 for known bounded roots and low-risk defaults, and 专项清理 for category/app exploration and experimental ranges.
-- Keep the main navigation as 首页、空间分析、专项包、历史/恢复、设置. Scan, review, and execution are task states inside those areas.
-- Assign the three prototype directions to concrete product roles: A is the default 首页 because its task cards and risk-first summary minimize decision cost; B is 空间分析 because its semantic map makes large-space ownership and drill-down legible; C is the advanced 专项清理 / execution-review workbench, not a competing home layout.
+- Use two task entry points: 快速清理 for known bounded roots and low-risk defaults, and 深度清理 for category/app exploration and experimental ranges. 深度清理 is the UI name;专项包 remains the internal rule-pack boundary.
+- Keep the main navigation as 首页、空间分析、深度清理、历史/恢复、设置. Scan, review, and execution are task states inside those areas.
+- Assign the three prototype directions to concrete product roles: A is the default 首页 because its task cards and risk-first summary minimize decision cost; B is 空间分析 because its semantic map makes large-space ownership and drill-down legible; C is the advanced 深度清理 / execution-review workbench, not a competing home layout.
 - Present results in a risk-first hierarchy, with category and pack grouping below it. Use result cards for conclusions, path lists for audit, and a语义空间图 for full-disk exploration.
 - Keep user content discoverable but `仅建议查看`; never let it enter the default cleanup selection.
 - Default low-risk rebuildable content to selected, require explicit selection for medium risk, and keep high-risk content view-only unless a future reviewed flow says otherwise.
@@ -163,4 +163,4 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 
 - The product should be judged by safe and accurate recommendations, not by the number of cleanup suggestions. A smaller trustworthy result beats a larger noisy one.
 - The broad “全部专项包” goal is intentionally constrained by stable/experimental scope labels and rule-pack governance. The first implementation should prove the shared workflow with representative stable and experimental scopes before expanding coverage indefinitely.
-- The prototype direction is decided: compose A (首页), B (空间分析), and C (专项清理 / 执行前复核) into one coherent navigation model. Keep the evidence and interactions read-only until the production seams for scanning, planning, isolation, and restore are connected.
+- The prototype direction is decided: compose A (首页), B (空间分析), and C (深度清理 / 执行前复核) into one coherent navigation model. Keep the evidence and interactions read-only until the production seams for scanning, planning, isolation, and restore are connected.

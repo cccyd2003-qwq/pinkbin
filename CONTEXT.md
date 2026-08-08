@@ -8,7 +8,10 @@ Pinkbin is an open-source, Windows-first desktop tool for reclaiming disk space.
 Routine cleanup of clearly rebuildable system or application data and leftovers. It is the low-friction path for ordinary users, but it never means "delete everything that looks unused".
 
 **专项清理**:
-Reviewing application- or workflow-specific space such as development environments, game data, model files, and media assets. It exposes context and consequences before the user chooses what to remove.
+Reviewing application- or workflow-specific space such as development environments, game data, model files, and media assets. It exposes context and consequences before the user chooses what to remove. This is the domain capability name; the user interface calls it “深度清理”.
+
+**深度清理**:
+The user-facing name for the专项清理 experience in the main navigation. It is intended to be easier to understand than the internal term专项包, while keeping the same review-first behavior.
 
 **快速清理**:
 The ordinary-user entry that surfaces low-risk cleanup recommendations and an estimated reclaimable amount with minimal configuration.
@@ -74,10 +77,10 @@ A space visualization that combines size with the product's business categories 
 The action boundary for user content and other high-uncertainty findings: the item is visible in analysis and may be explained or opened, but it cannot enter a default cleanup selection.
 
 **主导航**:
-The durable product areas: 首页, 空间分析, 专项包, 历史/恢复, and 设置. Scan and cleanup execution remain task flows within these areas rather than permanent top-level destinations.
+The durable product areas: 首页, 空间分析, 深度清理, 历史/恢复, and 设置. Scan and cleanup execution remain task flows within these areas rather than permanent top-level destinations. The UI uses “深度清理”;专项包 remains the internal rule-pack concept.
 
 **页面职责决策**:
-首页采用 A 的任务卡首页，负责给普通用户一个低认知负担的快速清理入口；空间分析采用 B 的语义空间地图，负责解释磁盘占用来源并支持下钻；C 的审核工作台作为专项清理和执行前复核的高级界面，不作为首页方向。
+首页采用 A 的任务卡首页，负责给普通用户一个低认知负担的快速清理入口；空间分析采用 B 的语义空间地图，负责解释磁盘占用来源并支持下钻；C 的审核工作台作为深度清理和执行前复核的高级界面，不作为首页方向。
 
 **清理界面读模型**:
 清理界面通过 `api.scan`、`buildScanContext`、`buildLocalCandidates` 和 `buildCleanerReadModel` 消费扫描证据。UI 不复制规则识别，也不把“低风险但尚未审核”的范围升级成默认清理项；执行动作在生产 seam 接入前仍保持只读或模拟。
