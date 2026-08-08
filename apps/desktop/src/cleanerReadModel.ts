@@ -3,6 +3,7 @@ import type { CleanupCandidate, Node, Risk, Scaffold } from './types';
 
 export type CleanerIconKey = 'browser' | 'dev' | 'chat' | 'game' | 'container' | 'media' | 'system' | 'unknown';
 export type CleanerItemState = 'ready' | 'review' | 'view-only';
+export type CleanerEvidenceSource = 'scanned' | 'scaffold';
 
 export interface CleanerReadItem {
   id: string;
@@ -21,6 +22,10 @@ export interface CleanerReadItem {
   paths: string[];
   defaultSelected: boolean;
   state: CleanerItemState;
+  evidence: string[];
+  audited: boolean;
+  planEligible: boolean;
+  source: CleanerEvidenceSource;
 }
 
 export interface CleanerReadModel {
@@ -130,6 +135,7 @@ function toReadItem(candidate: CleanupCandidate): CleanerReadItem {
   const risk = effectiveRisk(candidate);
   const state = stateFor(candidate, risk);
   const meta = metadataFor(candidate);
+  const planEligible = risk !== 'high' && (candidate.audited_scaffold || state === 'ready');
   return {
     id: `scan:${pathKey(candidate.path)}`,
     title: meta.title ?? candidate.name,
@@ -147,6 +153,10 @@ function toReadItem(candidate: CleanupCandidate): CleanerReadItem {
     paths: [candidate.path],
     defaultSelected: state === 'ready',
     state,
+    evidence: candidate.evidence,
+    audited: candidate.audited_scaffold,
+    planEligible,
+    source: candidate.source,
   };
 }
 
