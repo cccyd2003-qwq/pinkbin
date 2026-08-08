@@ -65,6 +65,20 @@ pnpm -C apps/desktop exec tsc --noEmit
 pnpm -C apps/desktop exec vite build
 ```
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `guoyiwen/pinkbin`, managed with `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
 ## 风格
 
 - **写文档/注释**：中文 prose + 英文代码、路径、术语（`scope` / `glob` / `dry-run` / `recycle` 等不翻译）。例：`scope 命中 *.db 视为红线`。
