@@ -12,6 +12,7 @@ import { Settings } from './components/Settings';
 import { Splitter } from './components/Splitter';
 import { Logo } from './components/Logo';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { CleanerDashboardPrototype } from './prototype/CleanerDashboardPrototype';
 import { formatBytes } from './format';
 import { loadSettings, isConfigured } from './advisorClient';
 
@@ -50,6 +51,14 @@ const MIN_RIGHT = 220;
 const MIN_CENTER = 360;
 
 export default function App() {
+  const prototypeMode = new URLSearchParams(window.location.search).get('prototype');
+  if (import.meta.env.DEV && prototypeMode === 'cleaner') {
+    return <CleanerDashboardPrototype />;
+  }
+  return <WorkspaceApp />;
+}
+
+function WorkspaceApp() {
   const root = useStore((s) => s.root);
   const setRoot = useStore((s) => s.setRoot);
   const setScaffolds = useStore((s) => s.setScaffolds);
