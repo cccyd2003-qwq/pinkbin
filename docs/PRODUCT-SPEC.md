@@ -122,6 +122,7 @@ Pinkbin 是一款开源、Windows-first 的可解释磁盘清理工具。它同�
 ## Implementation Decisions
 
 - Keep the existing scanner, scaffold/rule-pack, advisor, executor, and local report concepts as the main seams. Add the product surface as a read model over scan facts and cleanup recommendations rather than making the UI re-scan or re-classify the tree.
+- Keep the cleaner UI behind one read-model seam: `api.scan` provides evidence, `buildScanContext` and `buildLocalCandidates` apply the existing local rules, and `buildCleanerReadModel` adapts the result for A/B/C. The UI must not reclassify paths or promote an unreviewed scope to default selection.
 - Model the product around `ScanContext`, `专项包`, `scope`, `CleanupCandidate`, `CleanupPlan`, `清理任务状态`, and `本地扫描报告`. The scan result is evidence; the recommendation is derived; the plan is explicitly user-owned after人工审核.
 - Use two task entry points: 快速清理 for known bounded roots and low-risk defaults, and 专项清理 for category/app exploration and experimental ranges.
 - Keep the main navigation as 首页、空间分析、专项包、历史/恢复、设置. Scan, review, and execution are task states inside those areas.

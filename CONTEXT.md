@@ -79,6 +79,9 @@ The durable product areas: 首页, 空间分析, 专项包, 历史/恢复, and �
 **页面职责决策**:
 首页采用 A 的任务卡首页，负责给普通用户一个低认知负担的快速清理入口；空间分析采用 B 的语义空间地图，负责解释磁盘占用来源并支持下钻；C 的审核工作台作为专项清理和执行前复核的高级界面，不作为首页方向。
 
+**清理界面读模型**:
+清理界面通过 `api.scan`、`buildScanContext`、`buildLocalCandidates` 和 `buildCleanerReadModel` 消费扫描证据。UI 不复制规则识别，也不把“低风险但尚未审核”的范围升级成默认清理项；执行动作在生产 seam 接入前仍保持只读或模拟。
+
 **低风险内容**:
 Content whose removal is normally reversible or whose source can reliably recreate it, such as temporary files, caches, and build artifacts. Low risk permits default selection, not silent execution.
 
